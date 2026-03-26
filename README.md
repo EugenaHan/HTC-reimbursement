@@ -14,6 +14,20 @@ npm run dev
 npm run build
 ```
 
+## GitHub Pages
+
+仓库已适配 GitHub Pages 静态部署。
+
+启用方法：
+
+1. 打开仓库 `Settings` -> `Pages`
+2. `Build and deployment` 选择 `GitHub Actions`
+3. 保持 `main` 分支推送，工作流会自动发布
+
+发布地址通常为：
+
+`https://eugenahan.github.io/HTC-reimbursement/`
+
 ## 关键文件
 
 - `src/components/TravelExpenseApp.tsx`

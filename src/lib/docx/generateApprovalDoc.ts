@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import type { ExpenseApplicationFormValues } from "../form/types";
 import { mapFormValuesToTemplateData } from "./mappers";
 
-const TEMPLATE_PATH = "/template.docx";
+const TEMPLATE_PATH = `${import.meta.env.BASE_URL}template.docx`;
 
 export async function generateApprovalDoc(values: ExpenseApplicationFormValues) {
   const response = await fetch(TEMPLATE_PATH);
