@@ -34,9 +34,30 @@ const accommodationPlanSchema = z.object({
   actualAmount: optionalAmount,
 });
 
+const hasPlanContent = (plan: {
+  departureAt?: string;
+  arrivalAt?: string;
+  checkInAt?: string;
+  checkOutAt?: string;
+  vendor?: string;
+  quoteAt?: string;
+  budgetAmount?: number;
+  actualAmount?: number;
+}) =>
+  Boolean(
+    plan.departureAt ||
+      plan.arrivalAt ||
+      plan.checkInAt ||
+      plan.checkOutAt ||
+      plan.vendor ||
+      plan.quoteAt ||
+      plan.budgetAmount !== undefined ||
+      plan.actualAmount !== undefined,
+  );
+
 export const expenseApplicationSchema = z
   .object({
-    applicationType: z.enum(["trip", "reimbursement", "combined"]),
+    applicationType: z.enum(["trip", "reimbursement"]),
     employeeName: textField("员工姓名"),
     department: z.enum(["HTC", "SHOB", "OTHER"]),
     departmentOther: z.string().trim().max(100, "自定义部门长度不能超过 100 个字符"),
@@ -69,6 +90,114 @@ export const expenseApplicationSchema = z
         message: "结束日期不能早于开始日期",
         path: ["endDate"],
       });
+    }
+
+    if (values.applicationType === "trip") {
+      if (values.transportPlans.length !== 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "出差申请必须填写 3 个交通方案用于比价",
+          path: ["transportPlans"],
+        });
+      }
+
+      if (values.accommodationPlans.length !== 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "出差申请必须填写 3 个住宿方案用于比价",
+          path: ["accommodationPlans"],
+        });
+      }
+
+      values.transportPlans.forEach((plan, index) => {
+        if (!plan.departureAt || !plan.arrivalAt || !plan.vendor.trim() || !plan.quoteAt || plan.budgetAmount === undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "出差申请的交通方案需完整填写日期、预算、服务商和报价日期",
+            path: ["transportPlans", index],
+          });
+        }
+
+        if (plan.actualAmount !== undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "出差申请不填写实际金额",
+            path: ["transportPlans", index, "actualAmount"],
+          });
+        }
+      });
+
+      values.accommodationPlans.forEach((plan, index) => {
+        if (!plan.checkInAt || !plan.checkOutAt || !plan.vendor.trim() || !plan.quoteAt || plan.budgetAmount === undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "出差申请的住宿方案需完整填写日期、预算、服务商和报价日期",
+            path: ["accommodationPlans", index],
+          });
+        }
+
+        if (plan.actualAmount !== undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "出差申请不填写实际金额",
+            path: ["accommodationPlans", index, "actualAmount"],
+          });
+        }
+      });
+
+      if (values.mealActual !== undefined || values.groundActual !== undefined || values.otherActual !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "出差申请只填写预算金额",
+          path: ["mealActual"],
+        });
+      }
+    }
+
+    if (values.applicationType === "reimbursement") {
+      values.transportPlans.forEach((plan, index) => {
+        if (plan.budgetAmount !== undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "报销申请不填写预算金额",
+            path: ["transportPlans", index, "budgetAmount"],
+          });
+        }
+
+        if (hasPlanContent(plan) && (!plan.departureAt || !plan.arrivalAt || !plan.vendor.trim() || !plan.quoteAt || plan.actualAmount === undefined)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "已填写的交通方案需补全日期、实际金额、服务商和报价日期",
+            path: ["transportPlans", index],
+          });
+        }
+      });
+
+      values.accommodationPlans.forEach((plan, index) => {
+        if (plan.budgetAmount !== undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "报销申请不填写预算金额",
+            path: ["accommodationPlans", index, "budgetAmount"],
+          });
+        }
+
+        if (hasPlanContent(plan) && (!plan.checkInAt || !plan.checkOutAt || !plan.vendor.trim() || !plan.quoteAt || plan.actualAmount === undefined)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "已填写的住宿方案需补全日期、实际金额、服务商和报价日期",
+            path: ["accommodationPlans", index],
+          });
+        }
+      });
+
+      if (values.mealBudget !== undefined || values.groundBudget !== undefined || values.otherBudget !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "报销申请只填写实际金额",
+          path: ["mealBudget"],
+        });
+      }
     }
   });
 

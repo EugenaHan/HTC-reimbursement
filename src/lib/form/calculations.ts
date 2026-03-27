@@ -1,5 +1,10 @@
 import { differenceInCalendarDays } from "date-fns";
-import type { AccommodationPlan, ExpenseApplicationFormValues, TransportPlan } from "./types";
+import type {
+  AccommodationPlan,
+  ApplicationType,
+  ExpenseApplicationFormValues,
+  TransportPlan,
+} from "./types";
 
 const safeNumber = (value?: number | null) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
 
@@ -46,3 +51,26 @@ export const formatCurrency = (value?: number | null, blankIfZero = true) => {
 
   return `￥${amount.toFixed(2)}`;
 };
+
+export const getLowestBudgetPlan = (plans: Array<TransportPlan | AccommodationPlan>) => {
+  const indexed = plans
+    .map((plan, index) => ({ index, amount: safeNumber(plan.budgetAmount) }))
+    .filter((plan) => plan.amount > 0);
+
+  if (!indexed.length) {
+    return null;
+  }
+
+  return indexed.reduce((best, current) => (current.amount < best.amount ? current : best));
+};
+
+export const getPlanDisplayAmount = (
+  applicationType: ApplicationType,
+  plan?: TransportPlan | AccommodationPlan,
+) => (applicationType === "trip" ? safeNumber(plan?.budgetAmount) : safeNumber(plan?.actualAmount));
+
+export const getSummaryDisplayAmount = (
+  applicationType: ApplicationType,
+  budgetValue?: number,
+  actualValue?: number,
+) => (applicationType === "trip" ? safeNumber(budgetValue) : safeNumber(actualValue));

@@ -19,7 +19,7 @@ export const emptyAccommodationPlan = (): AccommodationPlan => ({
 });
 
 export const defaultValues: ExpenseApplicationFormValues = {
-  applicationType: "combined",
+  applicationType: "trip",
   employeeName: "",
   department: "HTC",
   departmentOther: "",

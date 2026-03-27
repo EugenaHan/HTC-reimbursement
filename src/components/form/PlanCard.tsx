@@ -8,8 +8,10 @@ interface PlanCardProps {
   baseName: `transportPlans.${number}` | `accommodationPlans.${number}`;
   startKey: "departureAt" | "checkInAt";
   endKey: "arrivalAt" | "checkOutAt";
+  amountMode: "budget" | "actual";
   control: Control<ExpenseApplicationFormValues>;
   errors: FieldErrors<ExpenseApplicationFormValues>;
+  highlightLabel?: string;
   onRemove?: () => void;
   dateLabels: {
     start: string;
@@ -30,8 +32,10 @@ export function PlanCard({
   baseName,
   startKey,
   endKey,
+  amountMode,
   control,
   errors,
+  highlightLabel,
   onRemove,
   dateLabels,
 }: PlanCardProps) {
@@ -45,15 +49,22 @@ export function PlanCard({
     <div className="rounded-2xl border border-ink-100 bg-ink-50/60 p-4">
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-base font-semibold text-ink-900">{title}</h3>
-        {onRemove ? (
-          <button
-            className="rounded-full border border-rose-200 px-3 py-1 text-sm text-rose-500 transition hover:bg-rose-50"
-            type="button"
-            onClick={onRemove}
-          >
-            删除
-          </button>
-        ) : null}
+        <div className="flex items-center gap-2">
+          {highlightLabel ? (
+            <span className="rounded-full bg-accent-100 px-3 py-1 text-xs font-semibold text-accent-800">
+              {highlightLabel}
+            </span>
+          ) : null}
+          {onRemove ? (
+            <button
+              className="rounded-full border border-rose-200 px-3 py-1 text-sm text-rose-500 transition hover:bg-rose-50"
+              type="button"
+              onClick={onRemove}
+            >
+              删除
+            </button>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -108,25 +119,27 @@ export function PlanCard({
           />
         </FieldShell>
 
-        <FieldShell error={readError(fieldErrors?.budgetAmount)} label="预算金额">
-          <Controller
-            control={control}
-            name={`${baseName}.budgetAmount` as Path<ExpenseApplicationFormValues>}
-            render={({ field }) => (
-              <CurrencyInput value={typeof field.value === "number" ? field.value : undefined} onChange={field.onChange} />
-            )}
-          />
-        </FieldShell>
-
-        <FieldShell error={readError(fieldErrors?.actualAmount)} label="实际金额">
-          <Controller
-            control={control}
-            name={`${baseName}.actualAmount` as Path<ExpenseApplicationFormValues>}
-            render={({ field }) => (
-              <CurrencyInput value={typeof field.value === "number" ? field.value : undefined} onChange={field.onChange} />
-            )}
-          />
-        </FieldShell>
+        {amountMode === "budget" ? (
+          <FieldShell error={readError(fieldErrors?.budgetAmount)} label="预算金额">
+            <Controller
+              control={control}
+              name={`${baseName}.budgetAmount` as Path<ExpenseApplicationFormValues>}
+              render={({ field }) => (
+                <CurrencyInput value={typeof field.value === "number" ? field.value : undefined} onChange={field.onChange} />
+              )}
+            />
+          </FieldShell>
+        ) : (
+          <FieldShell error={readError(fieldErrors?.actualAmount)} label="实际金额">
+            <Controller
+              control={control}
+              name={`${baseName}.actualAmount` as Path<ExpenseApplicationFormValues>}
+              render={({ field }) => (
+                <CurrencyInput value={typeof field.value === "number" ? field.value : undefined} onChange={field.onChange} />
+              )}
+            />
+          </FieldShell>
+        )}
       </div>
     </div>
   );

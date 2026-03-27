@@ -1,4 +1,4 @@
-export type ApplicationType = "trip" | "reimbursement" | "combined";
+export type ApplicationType = "trip" | "reimbursement";
 
 export type DepartmentOption = "HTC" | "SHOB" | "OTHER";
 
@@ -41,6 +41,7 @@ export interface ExpenseApplicationFormValues {
 }
 
 export interface DocxTemplateData {
+  form_title: string;
   trip_checked: string;
   reimbursement_checked: string;
   name: string;

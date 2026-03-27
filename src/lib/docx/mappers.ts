@@ -1,5 +1,12 @@
 import { format } from "date-fns";
-import { calculateActualTotal, calculateBudgetTotal, formatCurrency, getTripDays } from "../form/calculations";
+import {
+  calculateActualTotal,
+  calculateBudgetTotal,
+  formatCurrency,
+  getPlanDisplayAmount,
+  getSummaryDisplayAmount,
+  getTripDays,
+} from "../form/calculations";
 import type { AccommodationPlan, DocxTemplateData, ExpenseApplicationFormValues, TransportPlan } from "../form/types";
 
 const formatDate = (value?: string) => {
@@ -15,23 +22,23 @@ const formatDate = (value?: string) => {
   return format(parsed, "yyyy.MM.dd");
 };
 
-const budgetDisplay = (value?: number) => formatCurrency(value, true);
+const amountDisplay = (value?: number) => formatCurrency(value, true);
 
 const getDepartmentName = (values: ExpenseApplicationFormValues) =>
   values.department === "OTHER" ? values.departmentOther.trim() : values.department;
 
-const fillTransportSlot = (slot: number, plan?: TransportPlan) => ({
+const fillTransportSlot = (applicationType: ExpenseApplicationFormValues["applicationType"], slot: number, plan?: TransportPlan) => ({
   [`transport_${slot}_departure`]: formatDate(plan?.departureAt),
   [`transport_${slot}_arrival`]: formatDate(plan?.arrivalAt),
-  [`transport_${slot}_budget`]: budgetDisplay(plan?.budgetAmount),
+  [`transport_${slot}_budget`]: amountDisplay(getPlanDisplayAmount(applicationType, plan)),
   [`transport_${slot}_vendor`]: plan?.vendor?.trim() ?? "",
   [`transport_${slot}_quote_at`]: formatDate(plan?.quoteAt),
 });
 
-const fillHotelSlot = (slot: number, plan?: AccommodationPlan) => ({
+const fillHotelSlot = (applicationType: ExpenseApplicationFormValues["applicationType"], slot: number, plan?: AccommodationPlan) => ({
   [`hotel_${slot}_check_in`]: formatDate(plan?.checkInAt),
   [`hotel_${slot}_check_out`]: formatDate(plan?.checkOutAt),
-  [`hotel_${slot}_budget`]: budgetDisplay(plan?.budgetAmount),
+  [`hotel_${slot}_budget`]: amountDisplay(getPlanDisplayAmount(applicationType, plan)),
   [`hotel_${slot}_vendor`]: plan?.vendor?.trim() ?? "",
   [`hotel_${slot}_quote_at`]: formatDate(plan?.quoteAt),
 });
@@ -44,9 +51,9 @@ export const mapFormValuesToTemplateData = (values: ExpenseApplicationFormValues
   const accommodationPlans = [...values.accommodationPlans].slice(0, 3);
 
   return {
-    trip_checked: values.applicationType === "trip" || values.applicationType === "combined" ? "√" : "",
-    reimbursement_checked:
-      values.applicationType === "reimbursement" || values.applicationType === "combined" ? "√" : "",
+    form_title: values.applicationType === "trip" ? "出差申请表" : "报销申请表",
+    trip_checked: values.applicationType === "trip" ? "√" : "",
+    reimbursement_checked: values.applicationType === "reimbursement" ? "√" : "",
     name: values.employeeName.trim(),
     dept: getDepartmentName(values),
     start_date: formatDate(values.startDate),
@@ -54,15 +61,15 @@ export const mapFormValuesToTemplateData = (values: ExpenseApplicationFormValues
     trip_days: tripDays ? String(tripDays) : "",
     reason: values.tripReason.trim(),
     destination: values.destination.trim(),
-    meal_budget: budgetDisplay(values.mealBudget),
-    meal_actual: formatCurrency(values.mealActual, true),
-    ground_budget: budgetDisplay(values.groundBudget),
-    ground_actual: formatCurrency(values.groundActual, true),
-    other_budget: budgetDisplay(values.otherBudget),
-    other_actual: formatCurrency(values.otherActual, true),
-    total_budget: formatCurrency(totalBudget, false),
-    total_actual: formatCurrency(totalActual, false),
-    ...(fillTransportSlot(1, transportPlans[0]) as Pick<
+    meal_budget: amountDisplay(getSummaryDisplayAmount(values.applicationType, values.mealBudget, values.mealActual)),
+    meal_actual: values.applicationType === "reimbursement" ? formatCurrency(values.mealActual, true) : "",
+    ground_budget: amountDisplay(getSummaryDisplayAmount(values.applicationType, values.groundBudget, values.groundActual)),
+    ground_actual: values.applicationType === "reimbursement" ? formatCurrency(values.groundActual, true) : "",
+    other_budget: amountDisplay(getSummaryDisplayAmount(values.applicationType, values.otherBudget, values.otherActual)),
+    other_actual: values.applicationType === "reimbursement" ? formatCurrency(values.otherActual, true) : "",
+    total_budget: values.applicationType === "trip" ? formatCurrency(totalBudget, false) : "",
+    total_actual: values.applicationType === "reimbursement" ? formatCurrency(totalActual, false) : "",
+    ...(fillTransportSlot(values.applicationType, 1, transportPlans[0]) as Pick<
       DocxTemplateData,
       | "transport_1_departure"
       | "transport_1_arrival"
@@ -70,7 +77,7 @@ export const mapFormValuesToTemplateData = (values: ExpenseApplicationFormValues
       | "transport_1_vendor"
       | "transport_1_quote_at"
     >),
-    ...(fillTransportSlot(2, transportPlans[1]) as Pick<
+    ...(fillTransportSlot(values.applicationType, 2, transportPlans[1]) as Pick<
       DocxTemplateData,
       | "transport_2_departure"
       | "transport_2_arrival"
@@ -78,7 +85,7 @@ export const mapFormValuesToTemplateData = (values: ExpenseApplicationFormValues
       | "transport_2_vendor"
       | "transport_2_quote_at"
     >),
-    ...(fillTransportSlot(3, transportPlans[2]) as Pick<
+    ...(fillTransportSlot(values.applicationType, 3, transportPlans[2]) as Pick<
       DocxTemplateData,
       | "transport_3_departure"
       | "transport_3_arrival"
@@ -86,7 +93,7 @@ export const mapFormValuesToTemplateData = (values: ExpenseApplicationFormValues
       | "transport_3_vendor"
       | "transport_3_quote_at"
     >),
-    ...(fillHotelSlot(1, accommodationPlans[0]) as Pick<
+    ...(fillHotelSlot(values.applicationType, 1, accommodationPlans[0]) as Pick<
       DocxTemplateData,
       | "hotel_1_check_in"
       | "hotel_1_check_out"
@@ -94,7 +101,7 @@ export const mapFormValuesToTemplateData = (values: ExpenseApplicationFormValues
       | "hotel_1_vendor"
       | "hotel_1_quote_at"
     >),
-    ...(fillHotelSlot(2, accommodationPlans[1]) as Pick<
+    ...(fillHotelSlot(values.applicationType, 2, accommodationPlans[1]) as Pick<
       DocxTemplateData,
       | "hotel_2_check_in"
       | "hotel_2_check_out"
@@ -102,7 +109,7 @@ export const mapFormValuesToTemplateData = (values: ExpenseApplicationFormValues
       | "hotel_2_vendor"
       | "hotel_2_quote_at"
     >),
-    ...(fillHotelSlot(3, accommodationPlans[2]) as Pick<
+    ...(fillHotelSlot(values.applicationType, 3, accommodationPlans[2]) as Pick<
       DocxTemplateData,
       | "hotel_3_check_in"
       | "hotel_3_check_out"

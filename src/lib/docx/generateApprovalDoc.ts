@@ -33,5 +33,6 @@ export async function generateApprovalDoc(values: ExpenseApplicationFormValues) 
 
   const dateSegment = format(new Date(), "yyyyMMdd");
   const safeName = values.employeeName.trim() || "未命名";
-  saveAs(blob, `出差报销申请单_${safeName}_${dateSegment}.docx`);
+  const prefix = values.applicationType === "trip" ? "出差申请单" : "报销申请单";
+  saveAs(blob, `${prefix}_${safeName}_${dateSegment}.docx`);
 }

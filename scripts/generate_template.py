@@ -117,7 +117,7 @@ def build_document():
 
     title_2 = document.add_paragraph()
     title_2.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = title_2.add_run("出差申请及报销申请表（二合一）")
+    run = title_2.add_run("{form_title}")
     run.bold = True
     run.font.name = "Arial"
     run._element.rPr.rFonts.set(qn("w:eastAsia"), "宋体")
@@ -159,7 +159,7 @@ def build_document():
     row = table.rows[4]
     set_row_height(row, 1.1)
     set_cell_text(row.cells[0], "城市间交通方案", size=12)
-    headers = ["出发时间", "抵达时间", "预算", "服务商", "报价时间"]
+    headers = ["出发时间", "抵达时间", "金额", "服务商", "报价时间"]
     for index, label in enumerate(headers):
         set_cell_text(merge(row, 1 + index * 4, 4 + index * 4), label, size=12)
 
@@ -176,7 +176,7 @@ def build_document():
     row = table.rows[8]
     set_row_height(row, 1.1)
     set_cell_text(row.cells[0], "住宿方案", size=12)
-    headers = ["入住时间", "退房时间", "预算", "服务商", "报价时间"]
+    headers = ["入住时间", "退房时间", "金额", "服务商", "报价时间"]
     for index, label in enumerate(headers):
         set_cell_text(merge(row, 1 + index * 4, 4 + index * 4), label, size=12)
 
@@ -234,15 +234,13 @@ def build_document():
     title_run.font.size = Pt(12)
 
     notes = [
-        ("出差前申请：请在", "出差前至少提前两周预填写", "提交至部门主管，经总经理批准后生效。"),
-        ("出差后报销：请在", "出差返回后七个工作日内按实际费用", "再次填写，完成后提交给部门主管，部门主管提交至总经理，通过后提交至财务人员。"),
-        ("各项支出具体标准请参考", "《乾坤恒泰差旅费管理办法》", "。"),
-        ("本报销单必须填写", "完整、准确、合规", "，缺失或不准确的信息将无法审核通过。"),
-        ("用于报销时请必仔细核对填写的各项数据，一旦审核通过，不得随意更改。", "", ""),
-        ("所有支出须", "同步提供有效票据", "，票据电子版与本单同步提交，不得缺失、修改、替换。"),
-        ("审核结果通过，报销费用将在", "下次发放工资时汇入与工资相同的银行账户", "。"),
-        ("审核结果不通过，申报人员需及时了解原因并进行调整。", "", ""),
-        ("请在填写报销单时认真核对并按照要求填写，以便费用能够及时审核完成报销。", "", ""),
+        ("基本原则：", "厉行节约、预算控制、事前审批、真实合规", "。"),
+        ("出差前填写申请表，明确", "出差事由、时间、地点、预算", "，并完成部门主管审核和总经理批准。"),
+        ("城市间交通优先选择经济便捷的交通工具，", "三选一", "；特殊情况需提前说明，未经许可超标部分由个人承担。"),
+        ("住宿标准：", "一线城市 1000 元/晚以内，省会城市 800 元/晚以内，其他城市 600 元/晚以内", "。"),
+        ("餐费和市内交通费", "标准内根据有效票据实报实销", "；接待单位安排工作餐或交通工具的，不单独报销。"),
+        ("报销须在", "出差结束后 7 个工作日内", "完成，超期需书面说明。"),
+        ("所有票据及附件需", "真实、合法、完整", "，用于纳税和审计。"),
     ]
 
     for prefix, underline_text, suffix in notes:
