@@ -50,8 +50,24 @@ export const getLowestBudgetOption = (options: ComparisonOption[]) => {
   return indexed.reduce((best, current) => (current.amount < best.amount ? current : best));
 };
 
-const sumLowestBudgetAcrossGroups = (groups: Array<TransportGroup | AccommodationGroup>) =>
-  groups.reduce((sum, group) => sum + safeNumber(getLowestBudgetOption(group.options)?.amount), 0);
+export const getPreferredBudgetOption = (group: TransportGroup | AccommodationGroup) => {
+  if (typeof group.preferredOptionIndex !== "number") {
+    return null;
+  }
+
+  const option = group.options[group.preferredOptionIndex];
+  if (!option) {
+    return null;
+  }
+
+  return {
+    index: group.preferredOptionIndex,
+    amount: safeNumber(option.budgetAmount),
+  };
+};
+
+const sumPreferredBudgetAcrossGroups = (groups: Array<TransportGroup | AccommodationGroup>) =>
+  groups.reduce((sum, group) => sum + safeNumber(getPreferredBudgetOption(group)?.amount), 0);
 
 const sumActualAcrossGroups = (groups: Array<TransportGroup | AccommodationGroup>) =>
   groups.reduce(
@@ -60,8 +76,8 @@ const sumActualAcrossGroups = (groups: Array<TransportGroup | AccommodationGroup
   );
 
 export const calculateBudgetTotal = (values: ExpenseApplicationFormValues) =>
-  sumLowestBudgetAcrossGroups(values.transportGroups) +
-  sumLowestBudgetAcrossGroups(values.accommodationGroups) +
+  sumPreferredBudgetAcrossGroups(values.transportGroups) +
+  sumPreferredBudgetAcrossGroups(values.accommodationGroups) +
   safeNumber(values.mealBudget) +
   safeNumber(values.groundBudget) +
   safeNumber(values.otherBudget);

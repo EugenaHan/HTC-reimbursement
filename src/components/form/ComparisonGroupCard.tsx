@@ -1,8 +1,13 @@
 import { Controller, useWatch, type Control, type FieldErrors, type Path } from "react-hook-form";
 import { CurrencyInput } from "./CurrencyInput";
 import { FieldShell, fieldInputClassName } from "./FieldShell";
-import { formatCurrency, getLowestBudgetOption } from "../../lib/form/calculations";
-import type { ApplicationType, ExpenseApplicationFormValues } from "../../lib/form/types";
+import { formatCurrency, getPreferredBudgetOption } from "../../lib/form/calculations";
+import type {
+  AccommodationGroup,
+  ApplicationType,
+  ExpenseApplicationFormValues,
+  TransportGroup,
+} from "../../lib/form/types";
 
 interface ComparisonGroupCardProps {
   title: string;
@@ -58,6 +63,7 @@ export function ComparisonGroupCard({
         checkInAt?: string;
         checkOutAt?: string;
         options?: Array<{ vendor?: string; budgetAmount?: number; actualAmount?: number }>;
+        preferredOptionIndex?: number;
       }
     | undefined;
 
@@ -70,6 +76,7 @@ export function ComparisonGroupCard({
         arrivalAt?: { message?: string };
         checkInAt?: { message?: string };
         checkOutAt?: { message?: string };
+        preferredOptionIndex?: { message?: string };
         options?: Array<{
           vendor?: { message?: string };
           budgetAmount?: { message?: string };
@@ -84,7 +91,22 @@ export function ComparisonGroupCard({
     budgetAmount: option.budgetAmount,
     actualAmount: option.actualAmount,
   }));
-  const lowestOption = applicationType === "trip" ? getLowestBudgetOption(watchedOptions) : null;
+  const preferredGroup = baseName.startsWith("transport")
+    ? ({
+        label: groupValue?.label ?? "",
+        departureAt: groupValue?.departureAt ?? "",
+        arrivalAt: groupValue?.arrivalAt ?? "",
+        options: watchedOptions,
+        preferredOptionIndex: groupValue?.preferredOptionIndex,
+      } satisfies TransportGroup)
+    : ({
+        label: groupValue?.label ?? "",
+        checkInAt: groupValue?.checkInAt ?? "",
+        checkOutAt: groupValue?.checkOutAt ?? "",
+        options: watchedOptions,
+        preferredOptionIndex: groupValue?.preferredOptionIndex,
+      } satisfies AccommodationGroup);
+  const preferredOption = applicationType === "trip" ? getPreferredBudgetOption(preferredGroup) : null;
   const optionCount = applicationType === "trip" ? 3 : 1;
   const summaryParts = [
     groupValue?.label?.trim(),
@@ -113,9 +135,9 @@ export function ComparisonGroupCard({
         </div>
 
         <div className="flex items-center gap-2">
-          {lowestOption ? (
+          {preferredOption ? (
             <span className="rounded-full bg-accent-100 px-3 py-1 text-xs font-semibold text-accent-800">
-              最低价：方案 {lowestOption.index + 1} {formatCurrency(lowestOption.amount, false)}
+              最优方案：方案 {preferredOption.index + 1} {formatCurrency(preferredOption.amount, false)}
             </span>
           ) : null}
           {onRemove ? (
@@ -186,7 +208,7 @@ export function ComparisonGroupCard({
                   <h4 className="text-sm font-semibold text-ink-900">
                     {applicationType === "trip" ? `方案 ${optionIndex + 1}` : "实际明细"}
                   </h4>
-                  {lowestOption?.index === optionIndex ? (
+                  {preferredOption?.index === optionIndex ? (
                     <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
                       最佳方案
                     </span>
@@ -214,15 +236,36 @@ export function ComparisonGroupCard({
                   </FieldShell>
 
                   {applicationType === "trip" ? (
-                    <FieldShell error={readError(groupErrors?.options?.[optionIndex]?.budgetAmount)} label="预算金额" required>
-                      <Controller
-                        control={control}
-                        name={`${baseName}.options.${optionIndex}.budgetAmount` as Path<ExpenseApplicationFormValues>}
-                        render={({ field }) => (
-                          <CurrencyInput value={typeof field.value === "number" ? field.value : undefined} onChange={field.onChange} />
-                        )}
-                      />
-                    </FieldShell>
+                    <>
+                      <FieldShell error={readError(groupErrors?.options?.[optionIndex]?.budgetAmount)} label="预算金额" required>
+                        <Controller
+                          control={control}
+                          name={`${baseName}.options.${optionIndex}.budgetAmount` as Path<ExpenseApplicationFormValues>}
+                          render={({ field }) => (
+                            <CurrencyInput value={typeof field.value === "number" ? field.value : undefined} onChange={field.onChange} />
+                          )}
+                        />
+                      </FieldShell>
+                      <FieldShell
+                        error={optionIndex === 0 ? readError(groupErrors?.preferredOptionIndex) : undefined}
+                        label="最优方案"
+                      >
+                        <Controller
+                          control={control}
+                          name={`${baseName}.preferredOptionIndex` as Path<ExpenseApplicationFormValues>}
+                          render={({ field }) => (
+                            <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3">
+                              <input
+                                checked={field.value === optionIndex}
+                                type="radio"
+                                onChange={() => field.onChange(optionIndex)}
+                              />
+                              <span className="text-sm text-ink-800">设为最优方案</span>
+                            </label>
+                          )}
+                        />
+                      </FieldShell>
+                    </>
                   ) : (
                     <FieldShell error={readError(groupErrors?.options?.[optionIndex]?.actualAmount)} hint="无此项可留空" label="实际金额">
                       <Controller

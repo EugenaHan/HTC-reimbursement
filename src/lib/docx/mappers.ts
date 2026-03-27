@@ -3,7 +3,7 @@ import {
   calculateActualTotal,
   calculateBudgetTotal,
   formatCurrency,
-  getLowestBudgetOption,
+  getPreferredBudgetOption,
   getOptionDisplayAmount,
   getSummaryDisplayAmount,
   getTripDays,
@@ -44,7 +44,7 @@ const toComparisonGroupData = (
   startDate: string,
   endDate: string,
 ): DocxComparisonGroupData => {
-  const lowestBudgetOption = values.applicationType === "trip" ? getLowestBudgetOption(group.options) : null;
+  const preferredBudgetOption = values.applicationType === "trip" ? getPreferredBudgetOption(group) : null;
   const visibleOptions =
     values.applicationType === "trip" ? group.options.slice(0, 3) : group.options.slice(0, 1);
 
@@ -52,16 +52,16 @@ const toComparisonGroupData = (
     display_title: displayTitle,
     group_label: group.label.trim(),
     best_option_note:
-      values.applicationType === "trip" && lowestBudgetOption
-        ? `最低价为方案 ${lowestBudgetOption.index + 1}（${formatCurrency(lowestBudgetOption.amount, false)}）`
+      values.applicationType === "trip" && preferredBudgetOption
+        ? `最优方案为方案 ${preferredBudgetOption.index + 1}（${formatCurrency(preferredBudgetOption.amount, false)}）`
         : "",
     start_date: formatDate(startDate),
     end_date: formatDate(endDate),
     options: visibleOptions.map((option, index) => ({
       row_label:
         values.applicationType === "trip"
-          ? lowestBudgetOption?.index === index
-            ? `方案 ${index + 1}（最低价）`
+          ? preferredBudgetOption?.index === index
+            ? `方案 ${index + 1}（最优）`
             : `方案 ${index + 1}`
           : "实际",
       vendor: option.vendor?.trim() ?? "",

@@ -27,6 +27,7 @@ const transportGroupSchema = z.object({
   departureAt: z.string().trim().optional().default(""),
   arrivalAt: z.string().trim().optional().default(""),
   options: z.array(comparisonOptionSchema).min(1).max(3),
+  preferredOptionIndex: z.number().int().min(0).max(2).optional(),
 });
 
 const accommodationGroupSchema = z.object({
@@ -34,6 +35,7 @@ const accommodationGroupSchema = z.object({
   checkInAt: z.string().trim().optional().default(""),
   checkOutAt: z.string().trim().optional().default(""),
   options: z.array(comparisonOptionSchema).min(1).max(3),
+  preferredOptionIndex: z.number().int().min(0).max(2).optional(),
 });
 
 const transportGroupHasContent = (group: TransportGroup) =>
@@ -103,6 +105,18 @@ export const expenseApplicationSchema = z
           });
         }
 
+        if (
+          typeof group.preferredOptionIndex !== "number" ||
+          group.preferredOptionIndex < 0 ||
+          group.preferredOptionIndex > 2
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "请选择 1 个最优交通方案",
+            path: ["transportGroups", groupIndex, "preferredOptionIndex"],
+          });
+        }
+
         if (!group.label.trim()) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
@@ -144,6 +158,18 @@ export const expenseApplicationSchema = z
             code: z.ZodIssueCode.custom,
             message: "出差申请每条住宿需填写 3 个比价方案",
             path: ["accommodationGroups", groupIndex, "options"],
+          });
+        }
+
+        if (
+          typeof group.preferredOptionIndex !== "number" ||
+          group.preferredOptionIndex < 0 ||
+          group.preferredOptionIndex > 2
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "请选择 1 个最优住宿方案",
+            path: ["accommodationGroups", groupIndex, "preferredOptionIndex"],
           });
         }
 

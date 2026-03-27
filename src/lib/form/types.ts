@@ -13,6 +13,7 @@ export interface TransportGroup {
   departureAt: string;
   arrivalAt: string;
   options: ComparisonOption[];
+  preferredOptionIndex?: number;
 }
 
 export interface AccommodationGroup {
@@ -20,6 +21,7 @@ export interface AccommodationGroup {
   checkInAt: string;
   checkOutAt: string;
   options: ComparisonOption[];
+  preferredOptionIndex?: number;
 }
 
 export interface ExpenseApplicationFormValues {

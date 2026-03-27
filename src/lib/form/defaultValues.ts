@@ -19,6 +19,7 @@ export const emptyTransportGroup = (optionCount = 3): TransportGroup => ({
   departureAt: "",
   arrivalAt: "",
   options: createComparisonOptions(optionCount),
+  preferredOptionIndex: optionCount > 0 ? 0 : undefined,
 });
 
 export const emptyAccommodationGroup = (optionCount = 3): AccommodationGroup => ({
@@ -26,6 +27,7 @@ export const emptyAccommodationGroup = (optionCount = 3): AccommodationGroup => 
   checkInAt: "",
   checkOutAt: "",
   options: createComparisonOptions(optionCount),
+  preferredOptionIndex: optionCount > 0 ? 0 : undefined,
 });
 
 export const defaultValues: ExpenseApplicationFormValues = {

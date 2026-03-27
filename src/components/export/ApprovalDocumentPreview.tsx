@@ -1,6 +1,6 @@
 import {
   formatCurrency,
-  getLowestBudgetOption,
+  getPreferredBudgetOption,
   getOptionDisplayAmount,
   getSummaryDisplayAmount,
   isAccommodationGroupVisible,
@@ -23,7 +23,7 @@ interface ApprovalDocumentPreviewProps {
 
 const policyLines = [
   "基本原则：厉行节约、预算控制、事前审批、真实合规。",
-  "城市间交通优先选择经济便捷的交通工具，同一行程按 3 个方案比价，最低预算默认为最佳方案。",
+  "城市间交通优先选择经济便捷的交通工具，同一行程按 3 个方案比价，由员工手动勾选最优方案。",
   "住宿标准：一线城市 1000 元/晚以内，省会城市 800 元/晚以内，其他城市 600 元/晚以内。",
   "报销需在出差结束后 7 个工作日内完成，所有票据及附件需真实、合法、完整。",
 ];
@@ -54,7 +54,7 @@ function ComparisonTable({
   return (
     <div className="space-y-4">
       {groups.map((group, groupIndex) => {
-        const lowestOption = applicationType === "trip" ? getLowestBudgetOption(group.options) : null;
+        const preferredOption = applicationType === "trip" ? getPreferredBudgetOption(group) : null;
         const dates = dateAccessor(group);
         const visibleOptions = applicationType === "trip" ? group.options : group.options.slice(0, 1);
 
@@ -70,9 +70,9 @@ function ComparisonTable({
                   {startLabel}：{displayDate(dates.start)} | {endLabel}：{displayDate(dates.end)}
                 </p>
               </div>
-              {lowestOption ? (
+              {preferredOption ? (
                 <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
-                  最佳方案：方案 {lowestOption.index + 1} {formatCurrency(lowestOption.amount, false)}
+                  最优方案：方案 {preferredOption.index + 1} {formatCurrency(preferredOption.amount, false)}
                 </span>
               ) : null}
             </div>
@@ -98,10 +98,10 @@ function ComparisonTable({
               </thead>
               <tbody>
                 {visibleOptions.map((option, optionIndex) => (
-                  <tr key={`${title}-group-${groupIndex}-option-${optionIndex}`} className={lowestOption?.index === optionIndex ? "bg-amber-50" : undefined}>
+                  <tr key={`${title}-group-${groupIndex}-option-${optionIndex}`} className={preferredOption?.index === optionIndex ? "bg-amber-50" : undefined}>
                     <td className="border-r border-slate-300 px-2 py-3">
                       {applicationType === "trip" ? `方案 ${optionIndex + 1}` : "实际"}
-                      {applicationType === "trip" && lowestOption?.index === optionIndex ? "（最低价）" : ""}
+                      {applicationType === "trip" && preferredOption?.index === optionIndex ? "（最优）" : ""}
                     </td>
                     <td className="border-r border-slate-300 px-2 py-3">{displayDate(dates.start)}</td>
                     <td className="border-r border-slate-300 px-2 py-3">{displayDate(dates.end)}</td>

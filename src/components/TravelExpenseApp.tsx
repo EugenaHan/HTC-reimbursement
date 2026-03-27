@@ -37,6 +37,7 @@ type TransportGroupInput = {
   departureAt?: string;
   arrivalAt?: string;
   options?: Array<Partial<ComparisonOption>>;
+  preferredOptionIndex?: number;
 };
 
 type AccommodationGroupInput = {
@@ -44,6 +45,7 @@ type AccommodationGroupInput = {
   checkInAt?: string;
   checkOutAt?: string;
   options?: Array<Partial<ComparisonOption>>;
+  preferredOptionIndex?: number;
 };
 
 const steps = ["基础信息", "方案与明细", "费用汇总", "导出预览"];
@@ -80,7 +82,7 @@ const tripBasePolicy = [
 const transportPolicy = [
   "每新增一次都会生成 1 组交通比价卡片，组内固定为 3 个方案。",
   "同一交通组只需填写一次出发和抵达日期，下面 3 个方案会自动共用这组日期。",
-  "系统会自动将同组最低预算识别为最佳方案，并按各组最低价汇总总预算。",
+  "员工需在 3 个方案中手动选择 1 个最优方案，系统将按所选最优方案汇总总预算。",
 ];
 
 const hotelPolicy = [
@@ -132,6 +134,12 @@ const normalizeTransportGroups = (
     departureAt: group.departureAt ?? "",
     arrivalAt: group.arrivalAt ?? "",
     options: normalizeOptionsForType(applicationType, group.options),
+    preferredOptionIndex:
+      applicationType === "trip"
+        ? typeof group.preferredOptionIndex === "number" && group.preferredOptionIndex >= 0 && group.preferredOptionIndex < 3
+          ? group.preferredOptionIndex
+          : 0
+        : undefined,
   }));
 };
 
@@ -146,6 +154,12 @@ const normalizeAccommodationGroups = (
     checkInAt: group.checkInAt ?? "",
     checkOutAt: group.checkOutAt ?? "",
     options: normalizeOptionsForType(applicationType, group.options),
+    preferredOptionIndex:
+      applicationType === "trip"
+        ? typeof group.preferredOptionIndex === "number" && group.preferredOptionIndex >= 0 && group.preferredOptionIndex < 3
+          ? group.preferredOptionIndex
+          : 0
+        : undefined,
   }));
 };
 
@@ -522,14 +536,14 @@ export function TravelExpenseApp() {
                 title="费用汇总"
                 description={
                   isTripApplication
-                    ? "出差申请只填写预算金额。系统按每组最低价方案自动汇总预算总额。"
+                    ? "出差申请只填写预算金额。系统按每组手动选择的最优方案汇总预算总额。"
                     : "报销申请只填写实际金额。系统按所有实际录入金额自动汇总实际总额。"
                 }
               >
                 <div className="space-y-5">
                   <PolicyNotice
                     title={isTripApplication ? "预算提醒" : "报销提醒"}
-                    lines={isTripApplication ? ["每组交通和住宿只按最低预算方案计入总预算，其他两档用于比价留痕。"] : reimbursementPolicy}
+                    lines={isTripApplication ? ["每组交通和住宿只按员工勾选的最优方案计入总预算，其余方案用于比价留痕。"] : reimbursementPolicy}
                   />
                   <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                     {isTripApplication ? (
@@ -627,7 +641,7 @@ export function TravelExpenseApp() {
                     title="导出前确认"
                     lines={[
                       isTripApplication
-                        ? "本次为出差申请，系统会按各比价组最低价方案汇总预算，并保留所有比价组明细。"
+                        ? "本次为出差申请，系统会按各条中手动选择的最优方案汇总预算，并保留所有比价明细。"
                         : "本次为报销申请，系统只导出实际金额，并保留所有已填写的交通与住宿分组明细。",
                       ...reimbursementPolicy,
                     ]}
@@ -648,7 +662,7 @@ export function TravelExpenseApp() {
 
           <div className="flex flex-col gap-3 rounded-3xl border border-white/70 bg-white/90 p-5 shadow-panel md:flex-row md:items-center md:justify-between">
             <p className="text-sm leading-6 text-ink-500">
-              每组交通和住宿都支持折叠；预算按每组最低价自动汇总，最终一步会同时导出 Word 与 PDF。
+              每组交通和住宿都支持折叠；预算按每组手动选择的最优方案汇总，最终一步会同时导出 Word 与 PDF。
             </p>
             <div className="flex flex-wrap gap-3">
               <button
