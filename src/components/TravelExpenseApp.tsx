@@ -4,8 +4,8 @@ import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ApprovalDocumentPreview } from "./export/ApprovalDocumentPreview";
 import { CurrencyInput } from "./form/CurrencyInput";
+import { ComparisonGroupCard } from "./form/ComparisonGroupCard";
 import { FieldShell, fieldInputClassName } from "./form/FieldShell";
-import { PlanCard } from "./form/PlanCard";
 import { PolicyNotice } from "./form/PolicyNotice";
 import { SectionCard } from "./form/SectionCard";
 import { StepIndicator } from "./layout/StepIndicator";
@@ -15,16 +15,36 @@ import {
   calculateActualTotal,
   calculateBudgetTotal,
   formatCurrency,
-  getLowestBudgetPlan,
   getTripDays,
 } from "../lib/form/calculations";
 import {
+  createComparisonOptions,
   defaultValues,
-  emptyAccommodationPlan,
-  emptyTransportPlan,
+  emptyAccommodationGroup,
+  emptyTransportGroup,
 } from "../lib/form/defaultValues";
 import { expenseApplicationSchema } from "../lib/form/schema";
-import type { ApplicationType, ExpenseApplicationFormValues } from "../lib/form/types";
+import type {
+  AccommodationGroup,
+  ApplicationType,
+  ComparisonOption,
+  ExpenseApplicationFormValues,
+  TransportGroup,
+} from "../lib/form/types";
+
+type TransportGroupInput = {
+  label?: string;
+  departureAt?: string;
+  arrivalAt?: string;
+  options?: Array<Partial<ComparisonOption>>;
+};
+
+type AccommodationGroupInput = {
+  label?: string;
+  checkInAt?: string;
+  checkOutAt?: string;
+  options?: Array<Partial<ComparisonOption>>;
+};
 
 const steps = ["基础信息", "方案与明细", "费用汇总", "导出预览"];
 
@@ -39,7 +59,7 @@ const baseFields: Array<keyof ExpenseApplicationFormValues> = [
   "destination",
 ];
 
-const detailFields: Array<keyof ExpenseApplicationFormValues> = ["transportPlans", "accommodationPlans"];
+const detailFields: Array<keyof ExpenseApplicationFormValues> = ["transportGroups", "accommodationGroups"];
 
 const summaryFields: Array<keyof ExpenseApplicationFormValues> = [
   "mealBudget",
@@ -50,7 +70,6 @@ const summaryFields: Array<keyof ExpenseApplicationFormValues> = [
   "otherActual",
 ];
 
-const displayDate = (value?: string) => (value ? value.split("-").join(".") : "未填写");
 const displayCurrency = (value?: number) => formatCurrency(value, false);
 
 const tripBasePolicy = [
@@ -59,12 +78,14 @@ const tripBasePolicy = [
 ];
 
 const transportPolicy = [
-  "优先选择经济便捷的交通工具，必须提供 3 个交通方案进行比价。",
-  "特殊情况需提前说明，未经许可自行超标的部分由个人承担。",
+  "每新增一次都会生成 1 组交通比价卡片，组内固定为 3 个方案。",
+  "同一交通组只需填写一次出发和抵达日期，下面 3 个方案会自动共用这组日期。",
+  "系统会自动将同组最低预算识别为最佳方案，并按各组最低价汇总总预算。",
 ];
 
 const hotelPolicy = [
-  "必须提供 3 个住宿方案进行比价，系统会自动标记最低价为最佳方案。",
+  "每新增一次都会生成 1 组住宿比价卡片，组内固定为 3 个方案。",
+  "同一住宿组只需填写一次入住和离开日期，下面 3 个方案会自动共用这组日期。",
   "住宿标准：一线城市 1000 元/晚以内，省会城市 800 元/晚以内，其他城市 600 元/晚以内。",
 ];
 
@@ -82,34 +103,56 @@ const submitLabel: Record<ApplicationType, string> = {
 const getExportFilePrefix = (applicationType: ApplicationType) =>
   applicationType === "trip" ? "出差申请单" : "报销申请单";
 
-function normalizePlansForType<T extends { budgetAmount?: number; actualAmount?: number }>(
+const normalizeOptionsForType = (
   applicationType: ApplicationType,
-  plans: T[],
-  createEmpty: () => T,
-): T[] {
-  const next = [...plans];
+  options?: Array<Partial<ComparisonOption>>,
+): ComparisonOption[] => {
+  const requiredCount = applicationType === "trip" ? 3 : 1;
+  const next = [...(options ?? [])];
 
-  if (applicationType === "trip") {
-    while (next.length < 3) {
-      next.push(createEmpty());
-    }
-
-    return next.slice(0, 3).map((plan) => ({
-      ...plan,
-      actualAmount: undefined,
-    }));
+  while (next.length < requiredCount) {
+    next.push(createComparisonOptions()[0]);
   }
 
-  const baseline = next.length ? next : [createEmpty()];
-  return baseline.slice(0, 3).map((plan) => ({
-    ...plan,
-    budgetAmount: undefined,
+  return next.slice(0, requiredCount).map((option) => ({
+    vendor: option.vendor ?? "",
+    budgetAmount: applicationType === "trip" ? option.budgetAmount : undefined,
+    actualAmount: applicationType === "reimbursement" ? option.actualAmount : undefined,
   }));
-}
+};
+
+const normalizeTransportGroups = (
+  applicationType: ApplicationType,
+  groups?: TransportGroupInput[],
+) => {
+  const baseline = groups?.length ? groups : [emptyTransportGroup()];
+
+  return baseline.map((group) => ({
+    label: group.label ?? "",
+    departureAt: group.departureAt ?? "",
+    arrivalAt: group.arrivalAt ?? "",
+    options: normalizeOptionsForType(applicationType, group.options),
+  }));
+};
+
+const normalizeAccommodationGroups = (
+  applicationType: ApplicationType,
+  groups?: AccommodationGroupInput[],
+) => {
+  const baseline = groups?.length ? groups : [emptyAccommodationGroup()];
+
+  return baseline.map((group) => ({
+    label: group.label ?? "",
+    checkInAt: group.checkInAt ?? "",
+    checkOutAt: group.checkOutAt ?? "",
+    options: normalizeOptionsForType(applicationType, group.options),
+  }));
+};
 
 export function TravelExpenseApp() {
   const [currentStep, setCurrentStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
   const previewRef = useRef<HTMLDivElement | null>(null);
 
   const {
@@ -133,23 +176,23 @@ export function TravelExpenseApp() {
   const values = useWatch({ control });
 
   const {
-    fields: transportFields,
-    append: appendTransportPlan,
-    remove: removeTransportPlan,
-    replace: replaceTransportPlans,
+    fields: transportGroupFields,
+    append: appendTransportGroup,
+    remove: removeTransportGroup,
+    replace: replaceTransportGroups,
   } = useFieldArray({
     control,
-    name: "transportPlans",
+    name: "transportGroups",
   });
 
   const {
-    fields: accommodationFields,
-    append: appendAccommodationPlan,
-    remove: removeAccommodationPlan,
-    replace: replaceAccommodationPlans,
+    fields: accommodationGroupFields,
+    append: appendAccommodationGroup,
+    remove: removeAccommodationGroup,
+    replace: replaceAccommodationGroups,
   } = useFieldArray({
     control,
-    name: "accommodationPlans",
+    name: "accommodationGroups",
   });
 
   const isTripApplication = applicationType === "trip";
@@ -168,14 +211,11 @@ export function TravelExpenseApp() {
   }, [department, setValue]);
 
   useEffect(() => {
-    const currentTransport = getValues("transportPlans");
-    const currentAccommodation = getValues("accommodationPlans");
-
-    replaceTransportPlans(
-      normalizePlansForType(applicationType, currentTransport, emptyTransportPlan),
+    replaceTransportGroups(
+      normalizeTransportGroups(applicationType, getValues("transportGroups")),
     );
-    replaceAccommodationPlans(
-      normalizePlansForType(applicationType, currentAccommodation, emptyAccommodationPlan),
+    replaceAccommodationGroups(
+      normalizeAccommodationGroups(applicationType, getValues("accommodationGroups")),
     );
 
     if (applicationType === "trip") {
@@ -190,48 +230,38 @@ export function TravelExpenseApp() {
   }, [
     applicationType,
     getValues,
-    replaceAccommodationPlans,
-    replaceTransportPlans,
+    replaceAccommodationGroups,
+    replaceTransportGroups,
     setValue,
   ]);
 
-  const normalizedValues = useMemo<ExpenseApplicationFormValues>(() => {
-    return {
-      ...defaultValues,
-      ...values,
-      applicationType: values?.applicationType ?? defaultValues.applicationType,
-      department: values?.department ?? defaultValues.department,
-      departmentOther: values?.departmentOther ?? defaultValues.departmentOther,
-      employeeName: values?.employeeName ?? defaultValues.employeeName,
-      startDate: values?.startDate ?? defaultValues.startDate,
-      endDate: values?.endDate ?? defaultValues.endDate,
-      tripDays: values?.tripDays ?? defaultValues.tripDays,
-      tripReason: values?.tripReason ?? defaultValues.tripReason,
-      destination: values?.destination ?? defaultValues.destination,
-      transportPlans: (values?.transportPlans ?? defaultValues.transportPlans).map((plan) => ({
-        departureAt: plan.departureAt ?? "",
-        arrivalAt: plan.arrivalAt ?? "",
-        vendor: plan.vendor ?? "",
-        quoteAt: plan.quoteAt ?? "",
-        budgetAmount: plan.budgetAmount,
-        actualAmount: plan.actualAmount,
-      })),
-      accommodationPlans: (values?.accommodationPlans ?? defaultValues.accommodationPlans).map((plan) => ({
-        checkInAt: plan.checkInAt ?? "",
-        checkOutAt: plan.checkOutAt ?? "",
-        vendor: plan.vendor ?? "",
-        quoteAt: plan.quoteAt ?? "",
-        budgetAmount: plan.budgetAmount,
-        actualAmount: plan.actualAmount,
-      })),
-      mealBudget: values?.mealBudget,
-      mealActual: values?.mealActual,
-      groundBudget: values?.groundBudget,
-      groundActual: values?.groundActual,
-      otherBudget: values?.otherBudget,
-      otherActual: values?.otherActual,
-    };
-  }, [values]);
+  const normalizedValues = useMemo<ExpenseApplicationFormValues>(() => ({
+    ...defaultValues,
+    ...values,
+    applicationType: values?.applicationType ?? defaultValues.applicationType,
+    department: values?.department ?? defaultValues.department,
+    departmentOther: values?.departmentOther ?? defaultValues.departmentOther,
+    employeeName: values?.employeeName ?? defaultValues.employeeName,
+    startDate: values?.startDate ?? defaultValues.startDate,
+    endDate: values?.endDate ?? defaultValues.endDate,
+    tripDays: values?.tripDays ?? defaultValues.tripDays,
+    tripReason: values?.tripReason ?? defaultValues.tripReason,
+    destination: values?.destination ?? defaultValues.destination,
+    transportGroups: normalizeTransportGroups(
+      values?.applicationType ?? defaultValues.applicationType,
+      values?.transportGroups,
+    ),
+    accommodationGroups: normalizeAccommodationGroups(
+      values?.applicationType ?? defaultValues.applicationType,
+      values?.accommodationGroups,
+    ),
+    mealBudget: values?.mealBudget,
+    mealActual: values?.mealActual,
+    groundBudget: values?.groundBudget,
+    groundActual: values?.groundActual,
+    otherBudget: values?.otherBudget,
+    otherActual: values?.otherActual,
+  }), [values]);
 
   const totals = useMemo(
     () => ({
@@ -239,15 +269,6 @@ export function TravelExpenseApp() {
       totalActual: calculateActualTotal(normalizedValues),
     }),
     [normalizedValues],
-  );
-
-  const lowestTransportPlan = useMemo(
-    () => (isTripApplication ? getLowestBudgetPlan(normalizedValues.transportPlans) : null),
-    [isTripApplication, normalizedValues.transportPlans],
-  );
-  const lowestAccommodationPlan = useMemo(
-    () => (isTripApplication ? getLowestBudgetPlan(normalizedValues.accommodationPlans) : null),
-    [isTripApplication, normalizedValues.accommodationPlans],
   );
 
   const handleNext = async () => {
@@ -261,6 +282,7 @@ export function TravelExpenseApp() {
 
   const exportFiles = handleSubmit(async (formValues) => {
     setSubmitting(true);
+
     try {
       await generateApprovalDoc(formValues);
 
@@ -275,10 +297,12 @@ export function TravelExpenseApp() {
     }
   });
 
-  const departmentLabel =
-    normalizedValues.department === "OTHER"
-      ? normalizedValues.departmentOther || "未填写"
-      : normalizedValues.department;
+  const toggleCollapsed = (id: string) => {
+    setCollapsedGroups((current) => ({
+      ...current,
+      [id]: !current[id],
+    }));
+  };
 
   return (
     <main className="min-h-screen px-4 py-10 text-ink-900 md:px-8">
@@ -291,7 +315,7 @@ export function TravelExpenseApp() {
                 出差申请与报销申请系统
               </h1>
               <p className="mt-3 text-sm leading-7 text-ink-500 md:text-base">
-                出差申请只填写预算金额，报销申请只填写实际金额。最终一步会同时导出 Word 与 PDF。
+                支持多组交通和住宿比价。每组固定 3 个方案，共享日期只填一次；最终一步会同时导出 Word 与 PDF。
               </p>
             </div>
             <div className="rounded-2xl bg-ink-900 px-5 py-4 text-white">
@@ -315,7 +339,7 @@ export function TravelExpenseApp() {
           {currentStep === 0 ? (
             <SectionCard
               title="基础信息"
-              description="先确认本次申请的类型和基础信息。系统会根据申请类型自动切换预算/实际金额录入规则。"
+              description="先确认本次申请类型和基础信息。系统会根据申请类型自动切换预算/实际金额录入规则。"
             >
               <div className="space-y-5">
                 <PolicyNotice title="制度提醒" lines={tripBasePolicy} />
@@ -402,51 +426,43 @@ export function TravelExpenseApp() {
                 title="城市间交通方案"
                 description={
                   isTripApplication
-                    ? "出差申请必须完整填写 3 个交通方案，系统会自动判定最低价为最佳方案。"
-                    : "报销申请只填写实际金额；如填写交通方案，请补全日期、金额、服务商和报价日期。"
+                    ? "每组是同一行程下的 3 个预算方案。你可以折叠已填完的组，并继续新增下一组。"
+                    : "每条交通只录入 1 条实际明细，仍可继续新增交通2、交通3。"
                 }
                 action={
-                  isTripApplication ? null : (
-                    <button
-                      className="rounded-full border border-ink-200 px-4 py-2 text-sm font-medium text-ink-700 transition hover:border-ink-400 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={transportFields.length >= 3}
-                      type="button"
-                      onClick={() => appendTransportPlan(emptyTransportPlan())}
-                    >
-                      添加方案
-                    </button>
-                  )
+                  <button
+                    className="rounded-full border border-ink-200 px-4 py-2 text-sm font-medium text-ink-700 transition hover:border-ink-400 hover:bg-ink-50"
+                    type="button"
+                    onClick={() => appendTransportGroup(emptyTransportGroup(isTripApplication ? 3 : 1))}
+                  >
+                    添加交通
+                  </button>
                 }
               >
                 <div className="space-y-4">
-                  <PolicyNotice
-                    title="交通规则"
-                    lines={[
-                      ...transportPolicy,
-                      lowestTransportPlan
-                        ? `当前最低价交通方案：方案 ${lowestTransportPlan.index + 1}，${displayCurrency(lowestTransportPlan.amount)}`
-                        : "当前尚未形成可比价的交通方案。",
-                    ]}
-                  />
-                  {transportFields.map((field, index) => (
-                    <PlanCard
+                  <PolicyNotice title="交通规则" lines={transportPolicy} />
+                  {transportGroupFields.map((field, index) => (
+                    <ComparisonGroupCard
                       key={field.id}
-                      amountMode={isTripApplication ? "budget" : "actual"}
-                      baseName={`transportPlans.${index}`}
+                      applicationType={applicationType}
+                      baseName={`transportGroups.${index}`}
+                      collapsed={Boolean(collapsedGroups[field.id])}
                       control={control}
-                      dateLabels={{ start: "出发日期", end: "抵达日期" }}
                       endKey="arrivalAt"
+                      endLabel="抵达日期"
                       errors={errors}
-                      highlightLabel={
-                        isTripApplication && lowestTransportPlan?.index === index ? "最低价 / 最佳方案" : undefined
-                      }
+                      labelLabel="交通行程 / 目的地"
+                      optionFieldLabel="交通名称"
+                      optionPlaceholder="航班号 / 火车班次 / 网约车等"
                       startKey="departureAt"
-                      title={`交通方案 ${index + 1}`}
+                      startLabel="出发日期"
+                      title={`交通${index + 1}`}
                       onRemove={
-                        !isTripApplication && transportFields.length > 1
-                          ? () => removeTransportPlan(index)
+                        transportGroupFields.length > 1
+                          ? () => removeTransportGroup(index)
                           : undefined
                       }
+                      onToggle={() => toggleCollapsed(field.id)}
                     />
                   ))}
                 </div>
@@ -456,51 +472,43 @@ export function TravelExpenseApp() {
                 title="住宿方案"
                 description={
                   isTripApplication
-                    ? "出差申请必须完整填写 3 个住宿方案，系统会自动判定最低价为最佳方案。"
-                    : "报销申请只填写实际金额；如填写住宿方案，请补全日期、金额、服务商和报价日期。"
+                    ? "每组是同一目的地或入住场景下的 3 个预算方案。你可以折叠已填完的组，并继续新增下一组。"
+                    : "每条住宿只录入 1 条实际明细，仍可继续新增住宿2、住宿3。"
                 }
                 action={
-                  isTripApplication ? null : (
-                    <button
-                      className="rounded-full border border-ink-200 px-4 py-2 text-sm font-medium text-ink-700 transition hover:border-ink-400 hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      disabled={accommodationFields.length >= 3}
-                      type="button"
-                      onClick={() => appendAccommodationPlan(emptyAccommodationPlan())}
-                    >
-                      添加方案
-                    </button>
-                  )
+                  <button
+                    className="rounded-full border border-ink-200 px-4 py-2 text-sm font-medium text-ink-700 transition hover:border-ink-400 hover:bg-ink-50"
+                    type="button"
+                    onClick={() => appendAccommodationGroup(emptyAccommodationGroup(isTripApplication ? 3 : 1))}
+                  >
+                    添加住宿
+                  </button>
                 }
               >
                 <div className="space-y-4">
-                  <PolicyNotice
-                    title="住宿规则"
-                    lines={[
-                      ...hotelPolicy,
-                      lowestAccommodationPlan
-                        ? `当前最低价住宿方案：方案 ${lowestAccommodationPlan.index + 1}，${displayCurrency(lowestAccommodationPlan.amount)}`
-                        : "当前尚未形成可比价的住宿方案。",
-                    ]}
-                  />
-                  {accommodationFields.map((field, index) => (
-                    <PlanCard
+                  <PolicyNotice title="住宿规则" lines={hotelPolicy} />
+                  {accommodationGroupFields.map((field, index) => (
+                    <ComparisonGroupCard
                       key={field.id}
-                      amountMode={isTripApplication ? "budget" : "actual"}
-                      baseName={`accommodationPlans.${index}`}
+                      applicationType={applicationType}
+                      baseName={`accommodationGroups.${index}`}
+                      collapsed={Boolean(collapsedGroups[field.id])}
                       control={control}
-                      dateLabels={{ start: "入住日期", end: "退房日期" }}
                       endKey="checkOutAt"
+                      endLabel="离开日期"
                       errors={errors}
-                      highlightLabel={
-                        isTripApplication && lowestAccommodationPlan?.index === index ? "最低价 / 最佳方案" : undefined
-                      }
+                      labelLabel="入住城市 / 目的地"
+                      optionFieldLabel="酒店名称"
+                      optionPlaceholder="酒店名称"
                       startKey="checkInAt"
-                      title={`住宿方案 ${index + 1}`}
+                      startLabel="入住日期"
+                      title={`住宿${index + 1}`}
                       onRemove={
-                        !isTripApplication && accommodationFields.length > 1
-                          ? () => removeAccommodationPlan(index)
+                        accommodationGroupFields.length > 1
+                          ? () => removeAccommodationGroup(index)
                           : undefined
                       }
+                      onToggle={() => toggleCollapsed(field.id)}
                     />
                   ))}
                 </div>
@@ -512,12 +520,16 @@ export function TravelExpenseApp() {
             <div className="space-y-8">
               <SectionCard
                 title="费用汇总"
-                description={isTripApplication ? "出差申请只填写预算金额。" : "报销申请只填写实际金额。"}
+                description={
+                  isTripApplication
+                    ? "出差申请只填写预算金额。系统按每组最低价方案自动汇总预算总额。"
+                    : "报销申请只填写实际金额。系统按所有实际录入金额自动汇总实际总额。"
+                }
               >
                 <div className="space-y-5">
                   <PolicyNotice
                     title={isTripApplication ? "预算提醒" : "报销提醒"}
-                    lines={isTripApplication ? ["预算控制、标准管理，超标部分未经审批需个人承担。"] : reimbursementPolicy}
+                    lines={isTripApplication ? ["每组交通和住宿只按最低预算方案计入总预算，其他两档用于比价留痕。"] : reimbursementPolicy}
                   />
                   <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                     {isTripApplication ? (
@@ -615,8 +627,8 @@ export function TravelExpenseApp() {
                     title="导出前确认"
                     lines={[
                       isTripApplication
-                        ? "本次为出差申请，系统只导出预算金额，并已按最低价自动标记最佳方案。"
-                        : "本次为报销申请，系统只导出实际金额，并保留报销审核栏位。",
+                        ? "本次为出差申请，系统会按各比价组最低价方案汇总预算，并保留所有比价组明细。"
+                        : "本次为报销申请，系统只导出实际金额，并保留所有已填写的交通与住宿分组明细。",
                       ...reimbursementPolicy,
                     ]}
                   />
@@ -636,7 +648,7 @@ export function TravelExpenseApp() {
 
           <div className="flex flex-col gap-3 rounded-3xl border border-white/70 bg-white/90 p-5 shadow-panel md:flex-row md:items-center md:justify-between">
             <p className="text-sm leading-6 text-ink-500">
-              出差申请只允许预算金额，报销申请只允许实际金额；最终一步会同时导出 Word 与 PDF。
+              每组交通和住宿都支持折叠；预算按每组最低价自动汇总，最终一步会同时导出 Word 与 PDF。
             </p>
             <div className="flex flex-wrap gap-3">
               <button

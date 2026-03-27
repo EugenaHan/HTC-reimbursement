@@ -1,21 +1,31 @@
-import type { AccommodationPlan, ExpenseApplicationFormValues, TransportPlan } from "./types";
+import type {
+  AccommodationGroup,
+  ComparisonOption,
+  ExpenseApplicationFormValues,
+  TransportGroup,
+} from "./types";
 
-export const emptyTransportPlan = (): TransportPlan => ({
-  departureAt: "",
-  arrivalAt: "",
+export const createComparisonOption = (): ComparisonOption => ({
   vendor: "",
-  quoteAt: "",
   budgetAmount: undefined,
   actualAmount: undefined,
 });
 
-export const emptyAccommodationPlan = (): AccommodationPlan => ({
+export const createComparisonOptions = (count = 3) =>
+  Array.from({ length: count }, () => createComparisonOption());
+
+export const emptyTransportGroup = (optionCount = 3): TransportGroup => ({
+  label: "",
+  departureAt: "",
+  arrivalAt: "",
+  options: createComparisonOptions(optionCount),
+});
+
+export const emptyAccommodationGroup = (optionCount = 3): AccommodationGroup => ({
+  label: "",
   checkInAt: "",
   checkOutAt: "",
-  vendor: "",
-  quoteAt: "",
-  budgetAmount: undefined,
-  actualAmount: undefined,
+  options: createComparisonOptions(optionCount),
 });
 
 export const defaultValues: ExpenseApplicationFormValues = {
@@ -28,8 +38,8 @@ export const defaultValues: ExpenseApplicationFormValues = {
   tripDays: 0,
   tripReason: "",
   destination: "",
-  transportPlans: [emptyTransportPlan()],
-  accommodationPlans: [emptyAccommodationPlan()],
+  transportGroups: [emptyTransportGroup()],
+  accommodationGroups: [emptyAccommodationGroup()],
   mealBudget: undefined,
   mealActual: undefined,
   groundBudget: undefined,

@@ -1,5 +1,17 @@
-import { formatCurrency, getLowestBudgetPlan, getPlanDisplayAmount, getSummaryDisplayAmount } from "../../lib/form/calculations";
-import type { ApplicationType, ExpenseApplicationFormValues } from "../../lib/form/types";
+import {
+  formatCurrency,
+  getLowestBudgetOption,
+  getOptionDisplayAmount,
+  getSummaryDisplayAmount,
+  isAccommodationGroupVisible,
+  isTransportGroupVisible,
+} from "../../lib/form/calculations";
+import type {
+  AccommodationGroup,
+  ApplicationType,
+  ExpenseApplicationFormValues,
+  TransportGroup,
+} from "../../lib/form/types";
 
 interface ApprovalDocumentPreviewProps {
   applicationType: ApplicationType;
@@ -11,7 +23,7 @@ interface ApprovalDocumentPreviewProps {
 
 const policyLines = [
   "基本原则：厉行节约、预算控制、事前审批、真实合规。",
-  "城市间交通优先选择经济便捷的交通工具，三选一；特殊情况需提前说明，未经许可超标部分由个人承担。",
+  "城市间交通优先选择经济便捷的交通工具，同一行程按 3 个方案比价，最低预算默认为最佳方案。",
   "住宿标准：一线城市 1000 元/晚以内，省会城市 800 元/晚以内，其他城市 600 元/晚以内。",
   "报销需在出差结束后 7 个工作日内完成，所有票据及附件需真实、合法、完整。",
 ];
@@ -22,6 +34,92 @@ const displayCurrency = (value?: number) => formatCurrency(value, true);
 const getDepartmentLabel = (values: ExpenseApplicationFormValues) =>
   values.department === "OTHER" ? values.departmentOther.trim() : values.department;
 
+function ComparisonTable({
+  title,
+  startLabel,
+  endLabel,
+  nameLabel,
+  groups,
+  applicationType,
+  dateAccessor,
+}: {
+  title: string;
+  startLabel: string;
+  endLabel: string;
+  nameLabel: string;
+  groups: Array<TransportGroup | AccommodationGroup>;
+  applicationType: ApplicationType;
+  dateAccessor: (group: TransportGroup | AccommodationGroup) => { start: string; end: string };
+}) {
+  return (
+    <div className="space-y-4">
+      {groups.map((group, groupIndex) => {
+        const lowestOption = applicationType === "trip" ? getLowestBudgetOption(group.options) : null;
+        const dates = dateAccessor(group);
+        const visibleOptions = applicationType === "trip" ? group.options : group.options.slice(0, 1);
+
+        return (
+          <div key={`${title}-${groupIndex}-${group.label}`} className="overflow-hidden rounded-2xl border border-slate-300">
+            <div className="flex flex-col gap-2 border-b border-slate-300 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">
+                  {title}{groupIndex + 1}
+                  {group.label ? ` · ${group.label}` : ""}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {startLabel}：{displayDate(dates.start)} | {endLabel}：{displayDate(dates.end)}
+                </p>
+              </div>
+              {lowestOption ? (
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
+                  最佳方案：方案 {lowestOption.index + 1} {formatCurrency(lowestOption.amount, false)}
+                </span>
+              ) : null}
+            </div>
+
+            <table className="w-full table-fixed border-collapse">
+              <colgroup>
+                <col className="w-[18%]" />
+                <col className="w-[21%]" />
+                <col className="w-[21%]" />
+                <col className="w-[20%]" />
+                <col className="w-[20%]" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th className="border-b border-r border-slate-300 px-2 py-2 text-center font-medium text-slate-800">
+                    {applicationType === "trip" ? "方案" : "明细"}
+                  </th>
+                  <th className="border-b border-r border-slate-300 px-2 py-2 text-center font-medium text-slate-800">{startLabel}</th>
+                  <th className="border-b border-r border-slate-300 px-2 py-2 text-center font-medium text-slate-800">{endLabel}</th>
+                  <th className="border-b border-r border-slate-300 px-2 py-2 text-center font-medium text-slate-800">金额</th>
+                  <th className="border-b border-slate-300 px-2 py-2 text-center font-medium text-slate-800">{nameLabel}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleOptions.map((option, optionIndex) => (
+                  <tr key={`${title}-group-${groupIndex}-option-${optionIndex}`} className={lowestOption?.index === optionIndex ? "bg-amber-50" : undefined}>
+                    <td className="border-r border-slate-300 px-2 py-3">
+                      {applicationType === "trip" ? `方案 ${optionIndex + 1}` : "实际"}
+                      {applicationType === "trip" && lowestOption?.index === optionIndex ? "（最低价）" : ""}
+                    </td>
+                    <td className="border-r border-slate-300 px-2 py-3">{displayDate(dates.start)}</td>
+                    <td className="border-r border-slate-300 px-2 py-3">{displayDate(dates.end)}</td>
+                    <td className="border-r border-slate-300 px-2 py-3">
+                      {displayCurrency(getOptionDisplayAmount(applicationType, option))}
+                    </td>
+                    <td className="px-2 py-3">{option.vendor}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ApprovalDocumentPreview({
   applicationType,
   values,
@@ -29,9 +127,13 @@ export function ApprovalDocumentPreview({
   totalActual,
   previewRef,
 }: ApprovalDocumentPreviewProps) {
-  const transportBest = applicationType === "trip" ? getLowestBudgetPlan(values.transportPlans) : null;
-  const accommodationBest = applicationType === "trip" ? getLowestBudgetPlan(values.accommodationPlans) : null;
   const title = applicationType === "trip" ? "出差申请表" : "报销申请表";
+  const transportGroups = values.transportGroups.filter((group) =>
+    isTransportGroupVisible(group, applicationType),
+  );
+  const accommodationGroups = values.accommodationGroups.filter((group) =>
+    isAccommodationGroupVisible(group, applicationType),
+  );
 
   return (
     <div
@@ -92,49 +194,51 @@ export function ApprovalDocumentPreview({
               {values.destination}
             </td>
           </tr>
+        </tbody>
+      </table>
 
-          <tr>
-            <td className="border border-slate-300 px-2 py-3 text-center">城市间交通方案</td>
-            <td className="border border-slate-300 px-2 py-3 text-center">出发日期</td>
-            <td className="border border-slate-300 px-2 py-3 text-center">抵达日期</td>
-            <td className="border border-slate-300 px-2 py-3 text-center">金额</td>
-            <td className="border border-slate-300 px-2 py-3 text-center">服务商</td>
-            <td className="border border-slate-300 px-2 py-3 text-center">报价日期</td>
-          </tr>
-          {values.transportPlans.map((plan, index) => (
-            <tr key={`transport-row-${index}`} className={transportBest?.index === index ? "bg-accent-50" : undefined}>
-              <td className="border border-slate-300 px-2 py-3">方案 {index + 1}{transportBest?.index === index ? "（最低价）" : ""}</td>
-              <td className="border border-slate-300 px-2 py-3">{displayDate(plan.departureAt)}</td>
-              <td className="border border-slate-300 px-2 py-3">{displayDate(plan.arrivalAt)}</td>
-              <td className="border border-slate-300 px-2 py-3">
-                {displayCurrency(getPlanDisplayAmount(applicationType, plan))}
-              </td>
-              <td className="border border-slate-300 px-2 py-3">{plan.vendor}</td>
-              <td className="border border-slate-300 px-2 py-3">{displayDate(plan.quoteAt)}</td>
-            </tr>
-          ))}
+      <div className="mt-6 space-y-6">
+        {transportGroups.length ? (
+          <ComparisonTable
+            applicationType={applicationType}
+            dateAccessor={(group) => ({
+              start: (group as TransportGroup).departureAt,
+              end: (group as TransportGroup).arrivalAt,
+            })}
+            endLabel="抵达日期"
+            groups={transportGroups}
+            nameLabel="交通名称"
+            startLabel="出发日期"
+            title="交通"
+          />
+        ) : null}
 
-          <tr>
-            <td className="border border-slate-300 px-2 py-3 text-center">住宿方案</td>
-            <td className="border border-slate-300 px-2 py-3 text-center">入住日期</td>
-            <td className="border border-slate-300 px-2 py-3 text-center">退房日期</td>
-            <td className="border border-slate-300 px-2 py-3 text-center">金额</td>
-            <td className="border border-slate-300 px-2 py-3 text-center">服务商</td>
-            <td className="border border-slate-300 px-2 py-3 text-center">报价日期</td>
-          </tr>
-          {values.accommodationPlans.map((plan, index) => (
-            <tr key={`hotel-row-${index}`} className={accommodationBest?.index === index ? "bg-accent-50" : undefined}>
-              <td className="border border-slate-300 px-2 py-3">方案 {index + 1}{accommodationBest?.index === index ? "（最低价）" : ""}</td>
-              <td className="border border-slate-300 px-2 py-3">{displayDate(plan.checkInAt)}</td>
-              <td className="border border-slate-300 px-2 py-3">{displayDate(plan.checkOutAt)}</td>
-              <td className="border border-slate-300 px-2 py-3">
-                {displayCurrency(getPlanDisplayAmount(applicationType, plan))}
-              </td>
-              <td className="border border-slate-300 px-2 py-3">{plan.vendor}</td>
-              <td className="border border-slate-300 px-2 py-3">{displayDate(plan.quoteAt)}</td>
-            </tr>
-          ))}
+        {accommodationGroups.length ? (
+          <ComparisonTable
+            applicationType={applicationType}
+            dateAccessor={(group) => ({
+              start: (group as AccommodationGroup).checkInAt,
+              end: (group as AccommodationGroup).checkOutAt,
+            })}
+            endLabel="离开日期"
+            groups={accommodationGroups}
+            nameLabel="酒店名称"
+            startLabel="入住日期"
+            title="住宿"
+          />
+        ) : null}
+      </div>
 
+      <table className="mt-6 w-full table-fixed border-collapse border border-slate-300">
+        <colgroup>
+          <col className="w-[15%]" />
+          <col className="w-[17%]" />
+          <col className="w-[17%]" />
+          <col className="w-[17%]" />
+          <col className="w-[17%]" />
+          <col className="w-[17%]" />
+        </colgroup>
+        <tbody>
           <tr>
             <td className="border border-slate-300 px-2 py-3 text-center">餐费总支出</td>
             <td className="border border-slate-300 px-3 py-3" colSpan={2}>

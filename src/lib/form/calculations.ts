@@ -1,12 +1,18 @@
 import { differenceInCalendarDays } from "date-fns";
 import type {
-  AccommodationPlan,
+  AccommodationGroup,
   ApplicationType,
+  ComparisonOption,
   ExpenseApplicationFormValues,
-  TransportPlan,
+  TransportGroup,
 } from "./types";
 
 const safeNumber = (value?: number | null) => (typeof value === "number" && Number.isFinite(value) ? value : 0);
+
+const groupHasAmount = (options: ComparisonOption[], applicationType: ApplicationType) =>
+  options.some((option) =>
+    applicationType === "trip" ? option.budgetAmount !== undefined : option.actualAmount !== undefined,
+  );
 
 export const getTripDays = (startDate?: string, endDate?: string) => {
   if (!startDate || !endDate) {
@@ -23,26 +29,6 @@ export const getTripDays = (startDate?: string, endDate?: string) => {
   return differenceInCalendarDays(end, start) + 1;
 };
 
-const sumPlanBudget = (plans: Array<TransportPlan | AccommodationPlan>) =>
-  plans.reduce((sum, plan) => sum + safeNumber(plan.budgetAmount), 0);
-
-const sumPlanActual = (plans: Array<TransportPlan | AccommodationPlan>) =>
-  plans.reduce((sum, plan) => sum + safeNumber(plan.actualAmount), 0);
-
-export const calculateBudgetTotal = (values: ExpenseApplicationFormValues) =>
-  sumPlanBudget(values.transportPlans) +
-  sumPlanBudget(values.accommodationPlans) +
-  safeNumber(values.mealBudget) +
-  safeNumber(values.groundBudget) +
-  safeNumber(values.otherBudget);
-
-export const calculateActualTotal = (values: ExpenseApplicationFormValues) =>
-  sumPlanActual(values.transportPlans) +
-  sumPlanActual(values.accommodationPlans) +
-  safeNumber(values.mealActual) +
-  safeNumber(values.groundActual) +
-  safeNumber(values.otherActual);
-
 export const formatCurrency = (value?: number | null, blankIfZero = true) => {
   const amount = safeNumber(value);
   if (blankIfZero && amount === 0) {
@@ -52,10 +38,10 @@ export const formatCurrency = (value?: number | null, blankIfZero = true) => {
   return `￥${amount.toFixed(2)}`;
 };
 
-export const getLowestBudgetPlan = (plans: Array<TransportPlan | AccommodationPlan>) => {
-  const indexed = plans
-    .map((plan, index) => ({ index, amount: safeNumber(plan.budgetAmount) }))
-    .filter((plan) => plan.amount > 0);
+export const getLowestBudgetOption = (options: ComparisonOption[]) => {
+  const indexed = options
+    .map((option, index) => ({ index, amount: safeNumber(option.budgetAmount) }))
+    .filter((option) => option.amount > 0);
 
   if (!indexed.length) {
     return null;
@@ -64,13 +50,42 @@ export const getLowestBudgetPlan = (plans: Array<TransportPlan | AccommodationPl
   return indexed.reduce((best, current) => (current.amount < best.amount ? current : best));
 };
 
-export const getPlanDisplayAmount = (
+const sumLowestBudgetAcrossGroups = (groups: Array<TransportGroup | AccommodationGroup>) =>
+  groups.reduce((sum, group) => sum + safeNumber(getLowestBudgetOption(group.options)?.amount), 0);
+
+const sumActualAcrossGroups = (groups: Array<TransportGroup | AccommodationGroup>) =>
+  groups.reduce(
+    (sum, group) => sum + group.options.reduce((groupSum, option) => groupSum + safeNumber(option.actualAmount), 0),
+    0,
+  );
+
+export const calculateBudgetTotal = (values: ExpenseApplicationFormValues) =>
+  sumLowestBudgetAcrossGroups(values.transportGroups) +
+  sumLowestBudgetAcrossGroups(values.accommodationGroups) +
+  safeNumber(values.mealBudget) +
+  safeNumber(values.groundBudget) +
+  safeNumber(values.otherBudget);
+
+export const calculateActualTotal = (values: ExpenseApplicationFormValues) =>
+  sumActualAcrossGroups(values.transportGroups) +
+  sumActualAcrossGroups(values.accommodationGroups) +
+  safeNumber(values.mealActual) +
+  safeNumber(values.groundActual) +
+  safeNumber(values.otherActual);
+
+export const getOptionDisplayAmount = (
   applicationType: ApplicationType,
-  plan?: TransportPlan | AccommodationPlan,
-) => (applicationType === "trip" ? safeNumber(plan?.budgetAmount) : safeNumber(plan?.actualAmount));
+  option?: ComparisonOption,
+) => (applicationType === "trip" ? safeNumber(option?.budgetAmount) : safeNumber(option?.actualAmount));
 
 export const getSummaryDisplayAmount = (
   applicationType: ApplicationType,
   budgetValue?: number,
   actualValue?: number,
 ) => (applicationType === "trip" ? safeNumber(budgetValue) : safeNumber(actualValue));
+
+export const isTransportGroupVisible = (group: TransportGroup, applicationType: ApplicationType) =>
+  Boolean(group.label || group.departureAt || group.arrivalAt || groupHasAmount(group.options, applicationType) || group.options.some((option) => option.vendor));
+
+export const isAccommodationGroupVisible = (group: AccommodationGroup, applicationType: ApplicationType) =>
+  Boolean(group.label || group.checkInAt || group.checkOutAt || groupHasAmount(group.options, applicationType) || group.options.some((option) => option.vendor));

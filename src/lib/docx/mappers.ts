@@ -3,11 +3,21 @@ import {
   calculateActualTotal,
   calculateBudgetTotal,
   formatCurrency,
-  getPlanDisplayAmount,
+  getLowestBudgetOption,
+  getOptionDisplayAmount,
   getSummaryDisplayAmount,
   getTripDays,
+  isAccommodationGroupVisible,
+  isTransportGroupVisible,
 } from "../form/calculations";
-import type { AccommodationPlan, DocxTemplateData, ExpenseApplicationFormValues, TransportPlan } from "../form/types";
+import type {
+  AccommodationGroup,
+  ComparisonOption,
+  DocxComparisonGroupData,
+  DocxTemplateData,
+  ExpenseApplicationFormValues,
+  TransportGroup,
+} from "../form/types";
 
 const formatDate = (value?: string) => {
   if (!value) {
@@ -27,28 +37,53 @@ const amountDisplay = (value?: number) => formatCurrency(value, true);
 const getDepartmentName = (values: ExpenseApplicationFormValues) =>
   values.department === "OTHER" ? values.departmentOther.trim() : values.department;
 
-const fillTransportSlot = (applicationType: ExpenseApplicationFormValues["applicationType"], slot: number, plan?: TransportPlan) => ({
-  [`transport_${slot}_departure`]: formatDate(plan?.departureAt),
-  [`transport_${slot}_arrival`]: formatDate(plan?.arrivalAt),
-  [`transport_${slot}_budget`]: amountDisplay(getPlanDisplayAmount(applicationType, plan)),
-  [`transport_${slot}_vendor`]: plan?.vendor?.trim() ?? "",
-  [`transport_${slot}_quote_at`]: formatDate(plan?.quoteAt),
-});
+const toComparisonGroupData = (
+  values: ExpenseApplicationFormValues,
+  group: TransportGroup | AccommodationGroup,
+  displayTitle: string,
+  startDate: string,
+  endDate: string,
+): DocxComparisonGroupData => {
+  const lowestBudgetOption = values.applicationType === "trip" ? getLowestBudgetOption(group.options) : null;
+  const visibleOptions =
+    values.applicationType === "trip" ? group.options.slice(0, 3) : group.options.slice(0, 1);
 
-const fillHotelSlot = (applicationType: ExpenseApplicationFormValues["applicationType"], slot: number, plan?: AccommodationPlan) => ({
-  [`hotel_${slot}_check_in`]: formatDate(plan?.checkInAt),
-  [`hotel_${slot}_check_out`]: formatDate(plan?.checkOutAt),
-  [`hotel_${slot}_budget`]: amountDisplay(getPlanDisplayAmount(applicationType, plan)),
-  [`hotel_${slot}_vendor`]: plan?.vendor?.trim() ?? "",
-  [`hotel_${slot}_quote_at`]: formatDate(plan?.quoteAt),
-});
+  return {
+    display_title: displayTitle,
+    group_label: group.label.trim(),
+    best_option_note:
+      values.applicationType === "trip" && lowestBudgetOption
+        ? `最低价为方案 ${lowestBudgetOption.index + 1}（${formatCurrency(lowestBudgetOption.amount, false)}）`
+        : "",
+    start_date: formatDate(startDate),
+    end_date: formatDate(endDate),
+    options: visibleOptions.map((option, index) => ({
+      row_label:
+        values.applicationType === "trip"
+          ? lowestBudgetOption?.index === index
+            ? `方案 ${index + 1}（最低价）`
+            : `方案 ${index + 1}`
+          : "实际",
+      vendor: option.vendor?.trim() ?? "",
+      amount: amountDisplay(getOptionDisplayAmount(values.applicationType, option)),
+    })),
+  };
+};
+
+const mapTransportGroups = (values: ExpenseApplicationFormValues) =>
+  values.transportGroups
+    .filter((group) => isTransportGroupVisible(group, values.applicationType))
+    .map((group, index) => toComparisonGroupData(values, group, `交通${index + 1}`, group.departureAt, group.arrivalAt));
+
+const mapAccommodationGroups = (values: ExpenseApplicationFormValues) =>
+  values.accommodationGroups
+    .filter((group) => isAccommodationGroupVisible(group, values.applicationType))
+    .map((group, index) => toComparisonGroupData(values, group, `住宿${index + 1}`, group.checkInAt, group.checkOutAt));
 
 export const mapFormValuesToTemplateData = (values: ExpenseApplicationFormValues): DocxTemplateData => {
   const totalBudget = calculateBudgetTotal(values);
   const totalActual = calculateActualTotal(values);
   const tripDays = values.tripDays || getTripDays(values.startDate, values.endDate);
-  const transportPlans = [...values.transportPlans].slice(0, 3);
-  const accommodationPlans = [...values.accommodationPlans].slice(0, 3);
 
   return {
     form_title: values.applicationType === "trip" ? "出差申请表" : "报销申请表",
@@ -62,60 +97,11 @@ export const mapFormValuesToTemplateData = (values: ExpenseApplicationFormValues
     reason: values.tripReason.trim(),
     destination: values.destination.trim(),
     meal_budget: amountDisplay(getSummaryDisplayAmount(values.applicationType, values.mealBudget, values.mealActual)),
-    meal_actual: values.applicationType === "reimbursement" ? formatCurrency(values.mealActual, true) : "",
     ground_budget: amountDisplay(getSummaryDisplayAmount(values.applicationType, values.groundBudget, values.groundActual)),
-    ground_actual: values.applicationType === "reimbursement" ? formatCurrency(values.groundActual, true) : "",
     other_budget: amountDisplay(getSummaryDisplayAmount(values.applicationType, values.otherBudget, values.otherActual)),
-    other_actual: values.applicationType === "reimbursement" ? formatCurrency(values.otherActual, true) : "",
     total_budget: values.applicationType === "trip" ? formatCurrency(totalBudget, false) : "",
     total_actual: values.applicationType === "reimbursement" ? formatCurrency(totalActual, false) : "",
-    ...(fillTransportSlot(values.applicationType, 1, transportPlans[0]) as Pick<
-      DocxTemplateData,
-      | "transport_1_departure"
-      | "transport_1_arrival"
-      | "transport_1_budget"
-      | "transport_1_vendor"
-      | "transport_1_quote_at"
-    >),
-    ...(fillTransportSlot(values.applicationType, 2, transportPlans[1]) as Pick<
-      DocxTemplateData,
-      | "transport_2_departure"
-      | "transport_2_arrival"
-      | "transport_2_budget"
-      | "transport_2_vendor"
-      | "transport_2_quote_at"
-    >),
-    ...(fillTransportSlot(values.applicationType, 3, transportPlans[2]) as Pick<
-      DocxTemplateData,
-      | "transport_3_departure"
-      | "transport_3_arrival"
-      | "transport_3_budget"
-      | "transport_3_vendor"
-      | "transport_3_quote_at"
-    >),
-    ...(fillHotelSlot(values.applicationType, 1, accommodationPlans[0]) as Pick<
-      DocxTemplateData,
-      | "hotel_1_check_in"
-      | "hotel_1_check_out"
-      | "hotel_1_budget"
-      | "hotel_1_vendor"
-      | "hotel_1_quote_at"
-    >),
-    ...(fillHotelSlot(values.applicationType, 2, accommodationPlans[1]) as Pick<
-      DocxTemplateData,
-      | "hotel_2_check_in"
-      | "hotel_2_check_out"
-      | "hotel_2_budget"
-      | "hotel_2_vendor"
-      | "hotel_2_quote_at"
-    >),
-    ...(fillHotelSlot(values.applicationType, 3, accommodationPlans[2]) as Pick<
-      DocxTemplateData,
-      | "hotel_3_check_in"
-      | "hotel_3_check_out"
-      | "hotel_3_budget"
-      | "hotel_3_vendor"
-      | "hotel_3_quote_at"
-    >),
+    transport_groups: mapTransportGroups(values),
+    accommodation_groups: mapAccommodationGroups(values),
   };
 };

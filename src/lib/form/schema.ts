@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { ExpenseApplicationFormValues } from "./types";
+import type { AccommodationGroup, ExpenseApplicationFormValues, TransportGroup } from "./types";
 
 const textField = (label: string) =>
   z.string().trim().min(1, `${label}不能为空`).max(100, `${label}长度不能超过 100 个字符`);
@@ -16,43 +16,44 @@ const optionalAmount = z.preprocess((value) => {
   return Number.isNaN(numberValue) ? value : numberValue;
 }, z.number().min(0, "金额不能为负数").optional());
 
-const transportPlanSchema = z.object({
+const comparisonOptionSchema = z.object({
+  vendor: z.string().trim().optional().default(""),
+  budgetAmount: optionalAmount,
+  actualAmount: optionalAmount,
+});
+
+const transportGroupSchema = z.object({
+  label: z.string().trim().optional().default(""),
   departureAt: z.string().trim().optional().default(""),
   arrivalAt: z.string().trim().optional().default(""),
-  vendor: z.string().trim().optional().default(""),
-  quoteAt: z.string().trim().optional().default(""),
-  budgetAmount: optionalAmount,
-  actualAmount: optionalAmount,
+  options: z.array(comparisonOptionSchema).min(1).max(3),
 });
 
-const accommodationPlanSchema = z.object({
+const accommodationGroupSchema = z.object({
+  label: z.string().trim().optional().default(""),
   checkInAt: z.string().trim().optional().default(""),
   checkOutAt: z.string().trim().optional().default(""),
-  vendor: z.string().trim().optional().default(""),
-  quoteAt: z.string().trim().optional().default(""),
-  budgetAmount: optionalAmount,
-  actualAmount: optionalAmount,
+  options: z.array(comparisonOptionSchema).min(1).max(3),
 });
 
-const hasPlanContent = (plan: {
-  departureAt?: string;
-  arrivalAt?: string;
-  checkInAt?: string;
-  checkOutAt?: string;
-  vendor?: string;
-  quoteAt?: string;
-  budgetAmount?: number;
-  actualAmount?: number;
-}) =>
+const transportGroupHasContent = (group: TransportGroup) =>
   Boolean(
-    plan.departureAt ||
-      plan.arrivalAt ||
-      plan.checkInAt ||
-      plan.checkOutAt ||
-      plan.vendor ||
-      plan.quoteAt ||
-      plan.budgetAmount !== undefined ||
-      plan.actualAmount !== undefined,
+    group.label ||
+      group.departureAt ||
+      group.arrivalAt ||
+      group.options.some(
+        (option) => option.vendor || option.budgetAmount !== undefined || option.actualAmount !== undefined,
+      ),
+  );
+
+const accommodationGroupHasContent = (group: AccommodationGroup) =>
+  Boolean(
+    group.label ||
+      group.checkInAt ||
+      group.checkOutAt ||
+      group.options.some(
+        (option) => option.vendor || option.budgetAmount !== undefined || option.actualAmount !== undefined,
+      ),
   );
 
 export const expenseApplicationSchema = z
@@ -66,8 +67,8 @@ export const expenseApplicationSchema = z
     tripDays: z.number().min(0),
     tripReason: longTextField("出差事由"),
     destination: textField("目的地"),
-    transportPlans: z.array(transportPlanSchema).max(3, "城市间交通方案最多 3 条"),
-    accommodationPlans: z.array(accommodationPlanSchema).max(3, "住宿方案最多 3 条"),
+    transportGroups: z.array(transportGroupSchema).min(1, "至少保留 1 组交通方案"),
+    accommodationGroups: z.array(accommodationGroupSchema).min(1, "至少保留 1 组住宿方案"),
     mealBudget: optionalAmount,
     mealActual: optionalAmount,
     groundBudget: optionalAmount,
@@ -93,56 +94,92 @@ export const expenseApplicationSchema = z
     }
 
     if (values.applicationType === "trip") {
-      if (values.transportPlans.length !== 3) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "出差申请必须填写 3 个交通方案用于比价",
-          path: ["transportPlans"],
-        });
-      }
-
-      if (values.accommodationPlans.length !== 3) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "出差申请必须填写 3 个住宿方案用于比价",
-          path: ["accommodationPlans"],
-        });
-      }
-
-      values.transportPlans.forEach((plan, index) => {
-        if (!plan.departureAt || !plan.arrivalAt || !plan.vendor.trim() || !plan.quoteAt || plan.budgetAmount === undefined) {
+      values.transportGroups.forEach((group, groupIndex) => {
+        if (group.options.length !== 3) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "出差申请的交通方案需完整填写日期、预算、服务商和报价日期",
-            path: ["transportPlans", index],
+            message: "出差申请每条交通需填写 3 个比价方案",
+            path: ["transportGroups", groupIndex, "options"],
           });
         }
 
-        if (plan.actualAmount !== undefined) {
+        if (!group.label.trim()) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "出差申请不填写实际金额",
-            path: ["transportPlans", index, "actualAmount"],
+            message: "请填写交通行程或目的地",
+            path: ["transportGroups", groupIndex, "label"],
           });
         }
+
+        if (!group.departureAt || !group.arrivalAt) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "请完整填写该组交通日期",
+            path: ["transportGroups", groupIndex, "departureAt"],
+          });
+        }
+
+        group.options.forEach((option, optionIndex) => {
+          if (!option.vendor.trim() || option.budgetAmount === undefined) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "出差申请的 3 个交通方案都需要填写服务商和预算金额",
+              path: ["transportGroups", groupIndex, "options", optionIndex],
+            });
+          }
+
+          if (option.actualAmount !== undefined) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "出差申请不填写实际金额",
+              path: ["transportGroups", groupIndex, "options", optionIndex, "actualAmount"],
+            });
+          }
+        });
       });
 
-      values.accommodationPlans.forEach((plan, index) => {
-        if (!plan.checkInAt || !plan.checkOutAt || !plan.vendor.trim() || !plan.quoteAt || plan.budgetAmount === undefined) {
+      values.accommodationGroups.forEach((group, groupIndex) => {
+        if (group.options.length !== 3) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "出差申请的住宿方案需完整填写日期、预算、服务商和报价日期",
-            path: ["accommodationPlans", index],
+            message: "出差申请每条住宿需填写 3 个比价方案",
+            path: ["accommodationGroups", groupIndex, "options"],
           });
         }
 
-        if (plan.actualAmount !== undefined) {
+        if (!group.label.trim()) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "出差申请不填写实际金额",
-            path: ["accommodationPlans", index, "actualAmount"],
+            message: "请填写住宿目的地或入住城市",
+            path: ["accommodationGroups", groupIndex, "label"],
           });
         }
+
+        if (!group.checkInAt || !group.checkOutAt) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "请完整填写该组住宿日期",
+            path: ["accommodationGroups", groupIndex, "checkInAt"],
+          });
+        }
+
+        group.options.forEach((option, optionIndex) => {
+          if (!option.vendor.trim() || option.budgetAmount === undefined) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "出差申请的 3 个住宿方案都需要填写服务商和预算金额",
+              path: ["accommodationGroups", groupIndex, "options", optionIndex],
+            });
+          }
+
+          if (option.actualAmount !== undefined) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "出差申请不填写实际金额",
+              path: ["accommodationGroups", groupIndex, "options", optionIndex, "actualAmount"],
+            });
+          }
+        });
       });
 
       if (values.mealActual !== undefined || values.groundActual !== undefined || values.otherActual !== undefined) {
@@ -155,40 +192,100 @@ export const expenseApplicationSchema = z
     }
 
     if (values.applicationType === "reimbursement") {
-      values.transportPlans.forEach((plan, index) => {
-        if (plan.budgetAmount !== undefined) {
+      values.transportGroups.forEach((group, groupIndex) => {
+        if (!transportGroupHasContent(group)) {
+          return;
+        }
+
+        if (group.options.length !== 1) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "报销申请不填写预算金额",
-            path: ["transportPlans", index, "budgetAmount"],
+            message: "报销申请每条交通只保留 1 条实际明细",
+            path: ["transportGroups", groupIndex, "options"],
           });
         }
 
-        if (hasPlanContent(plan) && (!plan.departureAt || !plan.arrivalAt || !plan.vendor.trim() || !plan.quoteAt || plan.actualAmount === undefined)) {
+        if (!group.label.trim()) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "已填写的交通方案需补全日期、实际金额、服务商和报价日期",
-            path: ["transportPlans", index],
+            message: "请填写交通行程或目的地",
+            path: ["transportGroups", groupIndex, "label"],
           });
         }
+
+        if (!group.departureAt || !group.arrivalAt) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "请完整填写该组交通日期",
+            path: ["transportGroups", groupIndex, "departureAt"],
+          });
+        }
+
+        group.options.forEach((option, optionIndex) => {
+          if (option.budgetAmount !== undefined) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "报销申请不填写预算金额",
+              path: ["transportGroups", groupIndex, "options", optionIndex, "budgetAmount"],
+            });
+          }
+
+          if ((option.vendor || option.actualAmount !== undefined) && (!option.vendor.trim() || option.actualAmount === undefined)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "已填写的交通明细需同时填写服务商和实际金额",
+              path: ["transportGroups", groupIndex, "options", optionIndex],
+            });
+          }
+        });
       });
 
-      values.accommodationPlans.forEach((plan, index) => {
-        if (plan.budgetAmount !== undefined) {
+      values.accommodationGroups.forEach((group, groupIndex) => {
+        if (!accommodationGroupHasContent(group)) {
+          return;
+        }
+
+        if (group.options.length !== 1) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "报销申请不填写预算金额",
-            path: ["accommodationPlans", index, "budgetAmount"],
+            message: "报销申请每条住宿只保留 1 条实际明细",
+            path: ["accommodationGroups", groupIndex, "options"],
           });
         }
 
-        if (hasPlanContent(plan) && (!plan.checkInAt || !plan.checkOutAt || !plan.vendor.trim() || !plan.quoteAt || plan.actualAmount === undefined)) {
+        if (!group.label.trim()) {
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
-            message: "已填写的住宿方案需补全日期、实际金额、服务商和报价日期",
-            path: ["accommodationPlans", index],
+            message: "请填写住宿目的地或入住城市",
+            path: ["accommodationGroups", groupIndex, "label"],
           });
         }
+
+        if (!group.checkInAt || !group.checkOutAt) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "请完整填写该组住宿日期",
+            path: ["accommodationGroups", groupIndex, "checkInAt"],
+          });
+        }
+
+        group.options.forEach((option, optionIndex) => {
+          if (option.budgetAmount !== undefined) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "报销申请不填写预算金额",
+              path: ["accommodationGroups", groupIndex, "options", optionIndex, "budgetAmount"],
+            });
+          }
+
+          if ((option.vendor || option.actualAmount !== undefined) && (!option.vendor.trim() || option.actualAmount === undefined)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "已填写的住宿明细需同时填写服务商和实际金额",
+              path: ["accommodationGroups", groupIndex, "options", optionIndex],
+            });
+          }
+        });
       });
 
       if (values.mealBudget !== undefined || values.groundBudget !== undefined || values.otherBudget !== undefined) {
