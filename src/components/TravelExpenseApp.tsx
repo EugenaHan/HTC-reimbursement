@@ -9,7 +9,6 @@ import { FieldShell, fieldInputClassName } from "./form/FieldShell";
 import { PolicyNotice } from "./form/PolicyNotice";
 import { SectionCard } from "./form/SectionCard";
 import { StepIndicator } from "./layout/StepIndicator";
-import { generateApprovalDoc } from "../lib/docx/generateApprovalDoc";
 import { generateApprovalPdf } from "../lib/docx/generateApprovalPdf";
 import {
   calculateActualTotal,
@@ -98,8 +97,8 @@ const reimbursementPolicy = [
 ];
 
 const submitLabel: Record<ApplicationType, string> = {
-  trip: "导出 Word 和 PDF",
-  reimbursement: "导出 Word 和 PDF",
+  trip: "导出 PDF",
+  reimbursement: "导出 PDF",
 };
 
 const getExportFilePrefix = (applicationType: ApplicationType) =>
@@ -298,8 +297,6 @@ export function TravelExpenseApp() {
     setSubmitting(true);
 
     try {
-      await generateApprovalDoc(formValues);
-
       if (previewRef.current) {
         const dateSegment = format(new Date(), "yyyyMMdd");
         const safeName = formValues.employeeName.trim() || "未命名";
@@ -329,12 +326,12 @@ export function TravelExpenseApp() {
                 出差申请与报销申请系统
               </h1>
               <p className="mt-3 text-sm leading-7 text-ink-500 md:text-base">
-                支持多组交通和住宿比价。每组固定 3 个方案，共享日期只填一次；最终一步会同时导出 Word 与 PDF。
+                支持多组交通和住宿比价。每组固定 3 个方案，共享日期只填一次；最终一步会导出 PDF。
               </p>
             </div>
             <div className="rounded-2xl bg-ink-900 px-5 py-4 text-white">
               <p className="text-sm text-white/70">导出文件</p>
-              <p className="mt-1 font-medium">申请单_姓名_日期.docx / .pdf</p>
+              <p className="mt-1 font-medium">申请单_姓名_日期.pdf</p>
             </div>
           </div>
         </header>
@@ -634,7 +631,7 @@ export function TravelExpenseApp() {
             <div className="space-y-8">
               <SectionCard
                 title="最终预览"
-                description="这里展示最终导出内容。点击右下角按钮后，会同时下载 Word 和 PDF 两份文件。"
+                description="这里展示最终导出内容。点击右下角按钮后，会下载最终 PDF。"
               >
                 <div className="space-y-5">
                   <PolicyNotice
@@ -662,7 +659,7 @@ export function TravelExpenseApp() {
 
           <div className="flex flex-col gap-3 rounded-3xl border border-white/70 bg-white/90 p-5 shadow-panel md:flex-row md:items-center md:justify-between">
             <p className="text-sm leading-6 text-ink-500">
-              每组交通和住宿都支持折叠；预算按每组手动选择的最优方案汇总，最终一步会同时导出 Word 与 PDF。
+              每组交通和住宿都支持折叠；预算按每组手动选择的最优方案汇总，最终一步会导出 PDF。
             </p>
             <div className="flex flex-wrap gap-3">
               <button

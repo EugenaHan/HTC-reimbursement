@@ -59,7 +59,11 @@ function ComparisonTable({
         const visibleOptions = applicationType === "trip" ? group.options : group.options.slice(0, 1);
 
         return (
-          <div key={`${title}-${groupIndex}-${group.label}`} className="overflow-hidden rounded-2xl border border-slate-300">
+          <div
+            key={`${title}-${groupIndex}-${group.label}`}
+            data-pdf-block="true"
+            className="overflow-hidden rounded-2xl border border-slate-300"
+          >
             <div className="flex flex-col gap-2 border-b border-slate-300 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-900">
@@ -140,12 +144,12 @@ export function ApprovalDocumentPreview({
       ref={previewRef}
       className="mx-auto w-full max-w-[860px] rounded-[28px] bg-white p-8 text-[13px] text-slate-900 shadow-panel"
     >
-      <div className="space-y-1 text-center">
+      <div data-pdf-block="true" className="space-y-1 text-center">
         <p className="text-[18px] font-semibold">乾坤恒泰（北京）国际市场营销策划有限公司</p>
         <p className="text-[18px] font-semibold">{title}</p>
       </div>
 
-      <table className="mt-6 w-full table-fixed border-collapse border border-slate-300">
+      <table data-pdf-block="true" className="mt-6 w-full table-fixed border-collapse border border-slate-300">
         <colgroup>
           <col className="w-[15%]" />
           <col className="w-[17%]" />
@@ -229,7 +233,7 @@ export function ApprovalDocumentPreview({
         ) : null}
       </div>
 
-      <table className="mt-6 w-full table-fixed border-collapse border border-slate-300">
+      <table data-pdf-block="true" className="mt-6 w-full table-fixed border-collapse border border-slate-300">
         <colgroup>
           <col className="w-[15%]" />
           <col className="w-[17%]" />
@@ -288,7 +292,7 @@ export function ApprovalDocumentPreview({
         </tbody>
       </table>
 
-      <div className="mt-5 space-y-1">
+      <div data-pdf-block="true" className="mt-5 space-y-1">
         <p className="font-semibold">注意事项：</p>
         {policyLines.map((line) => (
           <p key={line} className="leading-6 text-slate-700">
