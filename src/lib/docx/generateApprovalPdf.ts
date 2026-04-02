@@ -4,7 +4,13 @@ import jsPDF from "jspdf";
 const PDF_PAGE_WIDTH_MM = 210;
 const PDF_PAGE_HEIGHT_MM = 297;
 const PDF_MARGIN_MM = 12;
-const PDF_RENDER_SCALE = 2;
+const PDF_TARGET_SIZE_BYTES = 5 * 1024 * 1024;
+const PDF_EXPORT_PROFILES = [
+  { scale: 1.4, quality: 0.72 },
+  { scale: 1.2, quality: 0.62 },
+  { scale: 1.05, quality: 0.54 },
+  { scale: 0.92, quality: 0.46 },
+] as const;
 
 const createPageShell = (previewElement: HTMLElement, previewWidth: number) => {
   const computedStyle = window.getComputedStyle(previewElement);
@@ -28,14 +34,27 @@ const createPageShell = (previewElement: HTMLElement, previewWidth: number) => {
   return page;
 };
 
-const renderPageToCanvas = async (page: HTMLElement, previewWidth: number) =>
+const renderPageToCanvas = async (page: HTMLElement, previewWidth: number, scale: number) =>
   html2canvas(page, {
     backgroundColor: "#ffffff",
-    scale: PDF_RENDER_SCALE,
+    scale,
     useCORS: true,
     width: previewWidth,
     windowWidth: previewWidth,
   });
+
+const downloadBlob = (blob: Blob, fileName: string) => {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = fileName;
+  link.click();
+
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
+};
 
 export async function generateApprovalPdf(previewElement: HTMLElement, fileName: string) {
   const blockElements = Array.from(
@@ -79,23 +98,52 @@ export async function generateApprovalPdf(previewElement: HTMLElement, fileName:
     }
   }
 
-  const pdf = new jsPDF("p", "mm", "a4");
   const imageWidthMm = usableWidthMm;
 
   try {
-    for (const [index, page] of pages.entries()) {
-      const canvas = await renderPageToCanvas(page, previewWidth);
-      const imageHeightMm = (canvas.height * imageWidthMm) / canvas.width;
-      const imageData = canvas.toDataURL("image/png");
+    let bestBlob: Blob | null = null;
 
-      if (index > 0) {
-        pdf.addPage();
+    for (const profile of PDF_EXPORT_PROFILES) {
+      const pdf = new jsPDF({
+        orientation: "p",
+        unit: "mm",
+        format: "a4",
+        compress: true,
+        putOnlyUsedFonts: true,
+      });
+
+      for (const [index, page] of pages.entries()) {
+        const canvas = await renderPageToCanvas(page, previewWidth, profile.scale);
+        const imageHeightMm = (canvas.height * imageWidthMm) / canvas.width;
+        const imageData = canvas.toDataURL("image/jpeg", profile.quality);
+
+        if (index > 0) {
+          pdf.addPage();
+        }
+
+        pdf.addImage(
+          imageData,
+          "JPEG",
+          PDF_MARGIN_MM,
+          PDF_MARGIN_MM,
+          imageWidthMm,
+          imageHeightMm,
+          undefined,
+          "FAST",
+        );
       }
 
-      pdf.addImage(imageData, "PNG", PDF_MARGIN_MM, PDF_MARGIN_MM, imageWidthMm, imageHeightMm);
+      const blob = pdf.output("blob");
+      bestBlob = blob;
+
+      if (blob.size <= PDF_TARGET_SIZE_BYTES) {
+        break;
+      }
     }
 
-    pdf.save(fileName);
+    if (bestBlob) {
+      downloadBlob(bestBlob, fileName);
+    }
   } finally {
     document.body.removeChild(stagingRoot);
   }
