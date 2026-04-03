@@ -468,6 +468,7 @@ export function TravelExpenseApp() {
                       startKey="departureAt"
                       startLabel="出发日期"
                       title={`交通${index + 1}`}
+                      variant="transport"
                       onRemove={
                         transportGroupFields.length > 1
                           ? () => removeTransportGroup(index)
@@ -514,6 +515,7 @@ export function TravelExpenseApp() {
                       startKey="checkInAt"
                       startLabel="入住日期"
                       title={`住宿${index + 1}`}
+                      variant="accommodation"
                       onRemove={
                         accommodationGroupFields.length > 1
                           ? () => removeAccommodationGroup(index)

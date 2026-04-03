@@ -11,6 +11,7 @@ import type {
 
 interface ComparisonGroupCardProps {
   title: string;
+  variant?: "transport" | "accommodation";
   baseName: `transportGroups.${number}` | `accommodationGroups.${number}`;
   control: Control<ExpenseApplicationFormValues>;
   errors: FieldErrors<ExpenseApplicationFormValues>;
@@ -37,6 +38,7 @@ const readError = (error: unknown) => {
 
 export function ComparisonGroupCard({
   title,
+  variant = "transport",
   baseName,
   control,
   errors,
@@ -108,6 +110,7 @@ export function ComparisonGroupCard({
       } satisfies AccommodationGroup);
   const preferredOption = applicationType === "trip" ? getPreferredBudgetOption(preferredGroup) : null;
   const optionCount = applicationType === "trip" ? 3 : 1;
+  const isTransport = variant === "transport";
   const summaryParts = [
     groupValue?.label?.trim(),
     groupValue?.[startKey] ? `${startLabel} ${String(groupValue[startKey]).split("-").join(".")}` : "",
@@ -115,20 +118,43 @@ export function ComparisonGroupCard({
   ].filter(Boolean);
 
   return (
-    <div className="rounded-3xl border border-ink-100 bg-ink-50/60">
-      <div className="flex flex-col gap-3 border-b border-ink-100 px-5 py-4 md:flex-row md:items-center md:justify-between">
+    <div
+      className={`overflow-hidden rounded-3xl border ${
+        isTransport
+          ? "border-sky-200 bg-sky-50/70"
+          : "border-emerald-200 bg-emerald-50/70"
+      }`}
+    >
+      <div
+        className={`flex flex-col gap-3 border-b px-5 py-4 md:flex-row md:items-center md:justify-between ${
+          isTransport
+            ? "border-sky-200 bg-gradient-to-r from-sky-100 via-sky-50 to-white"
+            : "border-emerald-200 bg-gradient-to-r from-emerald-100 via-emerald-50 to-white"
+        }`}
+      >
         <div className="space-y-1">
+          <p
+            className={`text-[11px] font-bold uppercase tracking-[0.24em] ${
+              isTransport ? "text-sky-600" : "text-emerald-600"
+            }`}
+          >
+            {isTransport ? "Transport" : "Accommodation"}
+          </p>
           <button
-            className="text-left text-base font-semibold text-ink-900 transition hover:text-ink-700"
+            className={`text-left text-lg font-semibold transition ${
+              isTransport ? "text-sky-950 hover:text-sky-800" : "text-emerald-950 hover:text-emerald-800"
+            }`}
             type="button"
             onClick={onToggle}
           >
             {collapsed ? "展开" : "收起"} {title}
           </button>
           {summaryParts.length ? (
-            <p className="text-sm text-ink-500">{summaryParts.join(" | ")}</p>
+            <p className={`text-sm ${isTransport ? "text-sky-700" : "text-emerald-700"}`}>
+              {summaryParts.join(" | ")}
+            </p>
           ) : (
-            <p className="text-sm text-ink-400">
+            <p className={`text-sm ${isTransport ? "text-sky-500" : "text-emerald-500"}`}>
               先填写该条的目的地和共享日期，再录入{applicationType === "trip" ? " 3 个比价方案" : " 1 条实际明细"}。
             </p>
           )}
@@ -203,9 +229,18 @@ export function ComparisonGroupCard({
 
           <div className={`grid gap-4 ${applicationType === "trip" ? "xl:grid-cols-3" : ""}`}>
             {Array.from({ length: optionCount }, (_, optionIndex) => (
-              <div key={`${baseName}-option-${optionIndex}`} className="rounded-2xl border border-white/80 bg-white/90 p-4 shadow-sm">
+              <div
+                key={`${baseName}-option-${optionIndex}`}
+                className={`rounded-2xl border bg-white/95 p-4 shadow-sm ${
+                  isTransport ? "border-sky-100" : "border-emerald-100"
+                }`}
+              >
                 <div className="mb-4 flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-ink-900">
+                  <h4
+                    className={`text-sm font-semibold ${
+                      isTransport ? "text-sky-900" : "text-emerald-900"
+                    }`}
+                  >
                     {applicationType === "trip" ? `方案 ${optionIndex + 1}` : "实际明细"}
                   </h4>
                   {preferredOption?.index === optionIndex ? (
@@ -254,13 +289,21 @@ export function ComparisonGroupCard({
                           control={control}
                           name={`${baseName}.preferredOptionIndex` as Path<ExpenseApplicationFormValues>}
                           render={({ field }) => (
-                            <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-ink-100 bg-ink-50 px-4 py-3">
+                            <label
+                              className={`flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-3 ${
+                                isTransport
+                                  ? "border-sky-100 bg-sky-50"
+                                  : "border-emerald-100 bg-emerald-50"
+                              }`}
+                            >
                               <input
                                 checked={field.value === optionIndex}
                                 type="radio"
                                 onChange={() => field.onChange(optionIndex)}
                               />
-                              <span className="text-sm text-ink-800">设为最优方案</span>
+                              <span className={`text-sm ${isTransport ? "text-sky-800" : "text-emerald-800"}`}>
+                                设为最优方案
+                              </span>
                             </label>
                           )}
                         />

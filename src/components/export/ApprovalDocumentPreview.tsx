@@ -36,6 +36,7 @@ const getDepartmentLabel = (values: ExpenseApplicationFormValues) =>
 
 function ComparisonTable({
   title,
+  variant,
   startLabel,
   endLabel,
   nameLabel,
@@ -44,6 +45,7 @@ function ComparisonTable({
   dateAccessor,
 }: {
   title: string;
+  variant: "transport" | "accommodation";
   startLabel: string;
   endLabel: string;
   nameLabel: string;
@@ -51,8 +53,32 @@ function ComparisonTable({
   applicationType: ApplicationType;
   dateAccessor: (group: TransportGroup | AccommodationGroup) => { start: string; end: string };
 }) {
+  const isTransport = variant === "transport";
+
   return (
     <div className="space-y-4">
+      <div
+        data-pdf-block="true"
+        className={`mt-6 mb-5 rounded-2xl border px-5 py-4 ${
+          isTransport
+            ? "border-sky-200 bg-gradient-to-r from-sky-100 via-sky-50 to-white"
+            : "border-emerald-200 bg-gradient-to-r from-emerald-100 via-emerald-50 to-white"
+        }`}
+      >
+        <p
+          className={`text-[11px] font-bold uppercase tracking-[0.28em] ${
+            isTransport ? "text-sky-600" : "text-emerald-600"
+          }`}
+        >
+          {isTransport ? "Transport Section" : "Accommodation Section"}
+        </p>
+        <p className={`mt-1 text-[22px] font-bold ${isTransport ? "text-sky-950" : "text-emerald-950"}`}>
+          {title}明细
+        </p>
+        <p className={`mt-1 text-sm ${isTransport ? "text-sky-700" : "text-emerald-700"}`}>
+          {isTransport ? "城市间交通方案与实际明细" : "住宿方案与实际明细"}
+        </p>
+      </div>
       {groups.map((group, groupIndex) => {
         const preferredOption = applicationType === "trip" ? getPreferredBudgetOption(group) : null;
         const dates = dateAccessor(group);
@@ -62,15 +88,23 @@ function ComparisonTable({
           <div
             key={`${title}-${groupIndex}-${group.label}`}
             data-pdf-block="true"
-            className="overflow-hidden rounded-2xl border border-slate-300"
+            className={`mb-4 overflow-hidden rounded-2xl border ${
+              isTransport ? "border-sky-200" : "border-emerald-200"
+            }`}
           >
-            <div className="flex flex-col gap-2 border-b border-slate-300 bg-slate-50 px-4 py-3 md:flex-row md:items-center md:justify-between">
+            <div
+              className={`flex flex-col gap-2 border-b px-4 py-3 md:flex-row md:items-center md:justify-between ${
+                isTransport
+                  ? "border-sky-200 bg-sky-50"
+                  : "border-emerald-200 bg-emerald-50"
+              }`}
+            >
               <div>
-                <p className="text-sm font-semibold text-slate-900">
+                <p className={`text-base font-semibold ${isTransport ? "text-sky-950" : "text-emerald-950"}`}>
                   {title}{groupIndex + 1}
                   {group.label ? ` · ${group.label}` : ""}
                 </p>
-                <p className="text-xs text-slate-500">
+                <p className={`text-xs ${isTransport ? "text-sky-700" : "text-emerald-700"}`}>
                   {startLabel}：{displayDate(dates.start)} | {endLabel}：{displayDate(dates.end)}
                 </p>
               </div>
@@ -214,6 +248,7 @@ export function ApprovalDocumentPreview({
             nameLabel="交通名称"
             startLabel="出发日期"
             title="交通"
+            variant="transport"
           />
         ) : null}
 
@@ -229,6 +264,7 @@ export function ApprovalDocumentPreview({
             nameLabel="酒店名称"
             startLabel="入住日期"
             title="住宿"
+            variant="accommodation"
           />
         ) : null}
       </div>

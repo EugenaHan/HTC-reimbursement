@@ -6,10 +6,12 @@ const PDF_PAGE_HEIGHT_MM = 297;
 const PDF_MARGIN_MM = 12;
 const PDF_TARGET_SIZE_BYTES = 5 * 1024 * 1024;
 const PDF_EXPORT_PROFILES = [
-  { scale: 1.4, quality: 0.72 },
+  { scale: 1.9, quality: 0.88 },
+  { scale: 1.7, quality: 0.82 },
+  { scale: 1.5, quality: 0.76 },
+  { scale: 1.35, quality: 0.7 },
   { scale: 1.2, quality: 0.62 },
   { scale: 1.05, quality: 0.54 },
-  { scale: 0.92, quality: 0.46 },
 ] as const;
 
 const createPageShell = (previewElement: HTMLElement, previewWidth: number) => {
@@ -129,7 +131,7 @@ export async function generateApprovalPdf(previewElement: HTMLElement, fileName:
           imageWidthMm,
           imageHeightMm,
           undefined,
-          "FAST",
+          "MEDIUM",
         );
       }
 
